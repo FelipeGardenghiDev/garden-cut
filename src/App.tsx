@@ -1,0 +1,484 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { Player } from './components/Player';
+import { Timeline } from './components/Timeline';
+import { Inspector } from './components/Inspector';
+import { ExportModal } from './components/ExportModal';
+import { AspectRatio, Clip, VideoFilter } from './types/editor';
+import { createDemoVideoBlob } from './utils/media-generator';
+import { generateLofiBeatAudioBlob } from './utils/audio-engine';
+
+export function App() {
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [zoom, setZoom] = useState<number>(55);
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [isSnapping, setIsSnapping] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<'media' | 'text' | 'effects' | 'ai' | 'audio'>('media');
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
+
+  // Clips list on the timeline
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [history, setHistory] = useState<Clip[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+  // Playback timer ref
+  const lastTimeRef = useRef<number>(0);
+
+  // Initial starter clips on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function initStarterClips() {
+      try {
+        const demoUrl1 = await createDemoVideoBlob('GardenCut - Cena 1', '#06b6d4', '#3b82f6', 5);
+        const demoUrl2 = await createDemoVideoBlob('Cortes Rápidos & Efeitos', '#8b5cf6', '#ec4899', 5);
+        const lofiAudioUrl = await generateLofiBeatAudioBlob(10);
+
+        if (!isMounted) return;
+
+        const initialClips: Clip[] = [
+          // Track 1: Text Subtitles
+          {
+            id: 'txt_init_1',
+            trackId: 'track-text',
+            type: 'text',
+            title: 'BEM-VINDOS AO GARDENCUT',
+            start: 0.5,
+            duration: 3.5,
+            source: '',
+            trimStart: 0,
+            trimEnd: 3.5,
+            scale: 1,
+            posX: 0,
+            posY: 0,
+            rotation: 0,
+            opacity: 1,
+            filter: 'none',
+            volume: 1,
+            speed: 1,
+            muted: false,
+            textProps: {
+              content: 'BEM-VINDOS AO GARDENCUT',
+              style: 'capcut-yellow',
+              fontSize: 38,
+              color: '#fde047',
+              backgroundColor: 'rgba(0,0,0,0.8)',
+              align: 'center',
+              bold: true
+            }
+          },
+          {
+            id: 'txt_init_2',
+            trackId: 'track-text',
+            type: 'text',
+            title: 'SOM & VÍDEO 100% LOCAL',
+            start: 4.5,
+            duration: 4.5,
+            source: '',
+            trimStart: 0,
+            trimEnd: 4.5,
+            scale: 1,
+            posX: 0,
+            posY: 0,
+            rotation: 0,
+            opacity: 1,
+            filter: 'none',
+            volume: 1,
+            speed: 1,
+            muted: false,
+            textProps: {
+              content: 'SOM & VÍDEO 100% LOCAL',
+              style: 'tiktok',
+              fontSize: 42,
+              color: '#ffffff',
+              backgroundColor: 'transparent',
+              align: 'center',
+              bold: true
+            }
+          },
+          // Track 2: Video Clips
+          {
+            id: 'vid_init_1',
+            trackId: 'track-video',
+            type: 'video',
+            title: 'Intro Tech (Com Som)',
+            start: 0,
+            duration: 5,
+            source: demoUrl1,
+            trimStart: 0,
+            trimEnd: 5,
+            scale: 1,
+            posX: 0,
+            posY: 0,
+            rotation: 0,
+            opacity: 1,
+            filter: 'none',
+            volume: 0.8,
+            speed: 1,
+            muted: false
+          },
+          {
+            id: 'vid_init_2',
+            trackId: 'track-video',
+            type: 'video',
+            title: 'Cena 2 - Efeitos',
+            start: 5,
+            duration: 5,
+            source: demoUrl2,
+            trimStart: 0,
+            trimEnd: 5,
+            scale: 1,
+            posX: 0,
+            posY: 0,
+            rotation: 0,
+            opacity: 1,
+            filter: 'vibrant',
+            volume: 0.8,
+            speed: 1,
+            muted: false
+          },
+          // Track 3: Audio with REAL synthesized Lo-Fi Beat!
+          {
+            id: 'aud_init_1',
+            trackId: 'track-audio',
+            type: 'audio',
+            title: 'Trilha Lo-Fi Beat Real',
+            start: 0,
+            duration: 10,
+            source: lofiAudioUrl,
+            trimStart: 0,
+            trimEnd: 10,
+            scale: 1,
+            posX: 0,
+            posY: 0,
+            rotation: 0,
+            opacity: 1,
+            filter: 'none',
+            volume: 0.9,
+            speed: 1,
+            muted: false
+          }
+        ];
+
+        setClips(initialClips);
+        setSelectedClipId(initialClips[2].id);
+        pushHistory(initialClips);
+      } catch (err) {
+        console.error('Error creating starter demo clips with audio:', err);
+      }
+    }
+
+    initStarterClips();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Calculate total timeline duration based on furthest clip end
+  const totalDuration = Math.max(
+    10,
+    clips.reduce((max, c) => Math.max(max, c.start + c.duration), 0)
+  );
+
+  // History management (Undo/Redo)
+  const pushHistory = (newClips: Clip[]) => {
+    setHistory((prev) => [...prev.slice(0, historyIndex + 1), newClips]);
+    setHistoryIndex((prev) => prev + 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const newIdx = historyIndex - 1;
+      setHistoryIndex(newIdx);
+      setClips(history[newIdx]);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIdx = historyIndex + 1;
+      setHistoryIndex(newIdx);
+      setClips(history[newIdx]);
+    }
+  };
+
+  // Playback loop with requestAnimationFrame
+  useEffect(() => {
+    let animId: number;
+
+    const loop = (timestamp: number) => {
+      if (lastTimeRef.current === 0) lastTimeRef.current = timestamp;
+      const deltaSec = (timestamp - lastTimeRef.current) / 1000;
+      lastTimeRef.current = timestamp;
+
+      if (isPlaying) {
+        setCurrentTime((prev) => {
+          const next = prev + deltaSec;
+          if (next >= totalDuration) {
+            setIsPlaying(false);
+            return 0;
+          }
+          return next;
+        });
+      }
+
+      animId = requestAnimationFrame(loop);
+    };
+
+    lastTimeRef.current = performance.now();
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [isPlaying, totalDuration]);
+
+  // Find currently active video clip at currentTime
+  const activeVideoClip = clips.find(
+    (c) =>
+      c.trackId === 'track-video' &&
+      currentTime >= c.start &&
+      currentTime < c.start + c.duration
+  ) || null;
+
+  // Active text subtitles overlays
+  const activeTextClips = clips.filter(
+    (c) =>
+      c.trackId === 'track-text' &&
+      currentTime >= c.start &&
+      currentTime < c.start + c.duration
+  );
+
+  // Active audio track clips
+  const activeAudioClips = clips.filter(
+    (c) =>
+      c.trackId === 'track-audio' &&
+      currentTime >= c.start &&
+      currentTime < c.start + c.duration
+  );
+
+  const selectedClip = clips.find((c) => c.id === selectedClipId) || null;
+
+  // Actions
+  const handleTogglePlay = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleSeek = (newTime: number) => {
+    setCurrentTime(Math.max(0, Math.min(totalDuration, newTime)));
+  };
+
+  const handleAddClip = (newClip: Clip) => {
+    let start = currentTime;
+    if (isSnapping) {
+      const sameTrackClips = clips.filter((c) => c.trackId === newClip.trackId);
+      if (sameTrackClips.length > 0) {
+        start = sameTrackClips.reduce((max, c) => Math.max(max, c.start + c.duration), 0);
+      }
+    }
+    const clipWithStart = { ...newClip, start };
+    const updated = [...clips, clipWithStart];
+    setClips(updated);
+    setSelectedClipId(clipWithStart.id);
+    pushHistory(updated);
+  };
+
+  const handleUpdateClip = (updated: Clip, commitHistory = true) => {
+    const nextClips = clips.map((c) => (c.id === updated.id ? updated : c));
+    setClips(nextClips);
+    if (commitHistory) {
+      pushHistory(nextClips);
+    }
+  };
+
+  const handleDeleteClip = (clipId: string) => {
+    const nextClips = clips.filter((c) => c.id !== clipId);
+    setClips(nextClips);
+    if (selectedClipId === clipId) setSelectedClipId(null);
+    pushHistory(nextClips);
+  };
+
+  // Split selected clip in two
+  const handleSplitClip = () => {
+    const target = selectedClip || activeVideoClip;
+    if (!target) return;
+
+    if (currentTime <= target.start || currentTime >= target.start + target.duration) {
+      return;
+    }
+
+    const firstDuration = currentTime - target.start;
+    const secondDuration = target.duration - firstDuration;
+
+    const firstHalf: Clip = {
+      ...target,
+      duration: firstDuration,
+      trimEnd: target.trimStart + firstDuration
+    };
+
+    const secondHalf: Clip = {
+      ...target,
+      id: `clip_split_${Date.now()}`,
+      start: currentTime,
+      duration: secondDuration,
+      trimStart: target.trimStart + firstDuration
+    };
+
+    const nextClips = clips.flatMap((c) => (c.id === target.id ? [firstHalf, secondHalf] : [c]));
+    setClips(nextClips);
+    setSelectedClipId(secondHalf.id);
+    pushHistory(nextClips);
+  };
+
+  const handleApplyFilterToSelected = (filter: VideoFilter) => {
+    if (selectedClip && selectedClip.type === 'video') {
+      handleUpdateClip({ ...selectedClip, filter });
+    } else if (activeVideoClip) {
+      handleUpdateClip({ ...activeVideoClip, filter });
+    }
+  };
+
+  // AI Feature: Auto-generate dynamic subtitles
+  const handleGenerateAutoSubtitles = async () => {
+    setIsAiProcessing(true);
+    try {
+      const res = await fetch('/api/ai-transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration: totalDuration })
+      });
+      const data = await res.json();
+      if (data.subtitles && Array.isArray(data.subtitles)) {
+        const newTextClips: Clip[] = data.subtitles.map((sub: any) => ({
+          id: sub.id,
+          trackId: 'track-text',
+          type: 'text',
+          title: sub.text,
+          start: sub.start,
+          duration: sub.duration,
+          source: '',
+          trimStart: 0,
+          trimEnd: sub.duration,
+          scale: 1,
+          posX: 0,
+          posY: 0,
+          rotation: 0,
+          opacity: 1,
+          filter: 'none',
+          volume: 1,
+          speed: 1,
+          muted: false,
+          textProps: {
+            content: sub.text,
+            style: 'capcut-yellow',
+            fontSize: sub.fontSize || 38,
+            color: sub.color || '#fde047',
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            align: 'center',
+            bold: true
+          }
+        }));
+
+        const nonText = clips.filter((c) => c.trackId !== 'track-text');
+        const nextClips = [...nonText, ...newTextClips];
+        setClips(nextClips);
+        pushHistory(nextClips);
+      }
+    } catch (err) {
+      console.error('Error generating AI subtitles:', err);
+    } finally {
+      setIsAiProcessing(false);
+    }
+  };
+
+  // AI Feature: Smart Silence Cut
+  const handleSmartSilenceCut = () => {
+    const nextClips = clips.map((c) => {
+      if (c.type === 'video' && c.duration > 1.5) {
+        return {
+          ...c,
+          duration: Math.max(1, c.duration - 0.5),
+          trimEnd: c.trimEnd - 0.5
+        };
+      }
+      return c;
+    });
+    setClips(nextClips);
+    pushHistory(nextClips);
+  };
+
+  return (
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0c0d12] text-white">
+      {/* 1. Header Bar */}
+      <Header
+        aspectRatio={aspectRatio}
+        onAspectRatioChange={setAspectRatio}
+        isSnapping={isSnapping}
+        onToggleSnapping={() => setIsSnapping(!isSnapping)}
+        onOpenExport={() => setIsExportModalOpen(true)}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={historyIndex > 0}
+        canRedo={historyIndex < history.length - 1}
+      />
+
+      {/* 2. Middle Work Area */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Left: Sidebar */}
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onAddClip={handleAddClip}
+          onApplyFilterToSelected={handleApplyFilterToSelected}
+          onGenerateAutoSubtitles={handleGenerateAutoSubtitles}
+          onSmartSilenceCut={handleSmartSilenceCut}
+          isAiProcessing={isAiProcessing}
+        />
+
+        {/* Center: Realtime Viewport & Multi-Track Sound */}
+        <Player
+          aspectRatio={aspectRatio}
+          currentTime={currentTime}
+          totalDuration={totalDuration}
+          isPlaying={isPlaying}
+          onTogglePlay={handleTogglePlay}
+          onSeek={handleSeek}
+          activeVideoClip={activeVideoClip}
+          activeTextClips={activeTextClips}
+          activeAudioClips={activeAudioClips}
+        />
+
+        {/* Right: Clip Properties Inspector */}
+        <Inspector
+          selectedClip={selectedClip}
+          onUpdateClip={handleUpdateClip}
+          onClose={() => setSelectedClipId(null)}
+        />
+      </div>
+
+      {/* 3. Bottom: Multi-Track Timeline */}
+      <Timeline
+        clips={clips}
+        currentTime={currentTime}
+        totalDuration={totalDuration}
+        zoom={zoom}
+        selectedClipId={selectedClipId}
+        onSelectClip={setSelectedClipId}
+        onSeek={handleSeek}
+        onSplitClip={handleSplitClip}
+        onDeleteClip={handleDeleteClip}
+        onUpdateClip={handleUpdateClip}
+        onZoomChange={setZoom}
+      />
+
+      {/* 4. Export Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        aspectRatio={aspectRatio}
+        clips={clips}
+        totalDuration={totalDuration}
+      />
+    </div>
+  );
+}
+
+export default App;
