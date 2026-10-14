@@ -6,7 +6,8 @@ import {
   ZoomOut, 
   Film, 
   Type, 
-  Music
+  Music,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Clip } from '../types/editor';
 import { formatSeconds } from '../utils/media-generator';
@@ -479,19 +480,30 @@ export const Timeline: React.FC<TimelineProps> = ({
                 <span>Vídeo Principal</span>
               </div>
 
-              {videoClips.map((clip) =>
-                renderClipBlock(
+              {videoClips.map((clip) => {
+                const isImg = clip.type === 'image';
+                return renderClipBlock(
                   clip,
                   {
-                    selected: 'bg-gradient-to-r from-cyan-400 to-blue-500 text-black font-bold',
-                    idle: 'bg-gradient-to-r from-[#1e293b] to-[#1e2030] text-zinc-200 border border-cyan-500/30',
-                    iconColor: selectedClipId === clip.id ? 'text-black' : 'text-cyan-400',
-                    handleColor: 'bg-cyan-600/80 hover:bg-cyan-700'
+                    selected: isImg
+                      ? 'bg-gradient-to-r from-pink-400 to-rose-500 text-black font-bold'
+                      : 'bg-gradient-to-r from-cyan-400 to-blue-500 text-black font-bold',
+                    idle: isImg
+                      ? 'bg-gradient-to-r from-[#2a1727] to-[#1c1220] text-pink-200 border border-pink-500/40'
+                      : 'bg-gradient-to-r from-[#1e293b] to-[#1e2030] text-zinc-200 border border-cyan-500/30',
+                    iconColor: selectedClipId === clip.id
+                      ? 'text-black'
+                      : isImg
+                      ? 'text-pink-400'
+                      : 'text-cyan-400',
+                    handleColor: isImg
+                      ? 'bg-pink-600/80 hover:bg-pink-700'
+                      : 'bg-cyan-600/80 hover:bg-cyan-700'
                   },
-                  <Film className="w-3.5 h-3.5" />,
+                  isImg ? <ImageIcon className="w-3.5 h-3.5" /> : <Film className="w-3.5 h-3.5" />,
                   clip.title
-                )
-              )}
+                );
+              })}
             </div>
 
             {/* TRACK 3: AUDIO / SFX TRACK */}

@@ -1,10 +1,12 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { 
   Play, 
   Pause, 
   RotateCcw, 
   SkipBack, 
-  SkipForward
+  SkipForward,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 import { AspectRatio, Clip } from '../types/editor';
 import { formatTimecode, calculateFadeMultiplier } from '../utils/timeline-math';
@@ -19,6 +21,9 @@ interface PlayerProps {
   activeVideoClip: Clip | null;
   activeTextClips: Clip[];
   activeAudioClips: Clip[];
+  selectedClip?: Clip | null;
+  onUpdateClip?: (updated: Clip, commitHistory?: boolean) => void;
+  onSelectClip?: (clipId: string | null) => void;
 }
 
 const AudioTrackPlayer: React.FC<{ clip: Clip; currentTime: number; isPlaying: boolean }> = ({
@@ -60,14 +65,19 @@ export const Player: React.FC<PlayerProps> = ({
   onSeek,
   activeVideoClip,
   activeTextClips,
-  activeAudioClips
+  activeAudioClips,
+  selectedClip,
+  onUpdateClip,
+  onSelectClip
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Sync HTML5 video element with current timeline position
   useEffect(() => {
-    if (!videoRef.current || !activeVideoClip) return;
+    if (!videoRef.current || !activeVideoClip || activeVideoClip.type !== 'video') return;
     
     // Calculate media source offset
     const clipOffset = (currentTime - activeVideoClip.start) * activeVideoClip.speed + activeVideoClip.trimStart;
@@ -88,18 +98,41 @@ export const Player: React.FC<PlayerProps> = ({
     }
   }, [currentTime, isPlaying, activeVideoClip]);
 
-  // Keyboard shortcut: Space for Play/Pause
+  // Fullscreen state listener
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(document.fullscreenElement !== null);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  // Toggle fullscreen mode
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      if (playerContainerRef.current) {
+        playerContainerRef.current.requestFullscreen().catch(() => {});
+      }
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  // Keyboard shortcuts: Space for Play/Pause, F for Fullscreen
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === 'Space') {
         e.preventDefault();
         onTogglePlay();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        handleToggleFullscreen();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onTogglePlay]);
+  }, [onTogglePlay, handleToggleFullscreen]);
 
   // CSS Filter string mapping
   const getFilterStyle = (filter?: string) => {
@@ -129,8 +162,68 @@ export const Player: React.FC<PlayerProps> = ({
     }
   };
 
+  // Gizmo drag handler for direct manipulation (moving and scaling)
+  const handleStartGizmoDrag = (
+    e: React.MouseEvent,
+    clip: Clip,
+    action: 'move' | 'scale'
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onUpdateClip || !viewportRef.current) return;
+
+    const rect = viewportRef.current.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initPosX = clip.posX || 0;
+    const initPosY = clip.posY || 0;
+    const initScale = clip.scale || 1;
+
+    // Viewport center
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const initialDist = Math.max(20, Math.hypot(startX - centerX, startY - centerY));
+
+    let currentClip: Clip = { ...clip };
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (action === 'move') {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        const deltaXPct = (deltaX / rect.width) * 100;
+        const deltaYPct = (deltaY / rect.height) * 100;
+        const newPosX = Math.max(-150, Math.min(150, Math.round(initPosX + deltaXPct)));
+        const newPosY = Math.max(-150, Math.min(150, Math.round(initPosY + deltaYPct)));
+        currentClip = { ...clip, posX: newPosX, posY: newPosY };
+        onUpdateClip(currentClip, false);
+      } else {
+        const currentDist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY);
+        const ratio = currentDist / initialDist;
+        const newScale = Math.max(0.2, Math.min(3.0, Number((initScale * ratio).toFixed(2))));
+        currentClip = { ...clip, scale: newScale };
+        onUpdateClip(currentClip, false);
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      onUpdateClip(currentClip, true);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const isVisualSelected = selectedClip && activeVideoClip && selectedClip.id === activeVideoClip.id;
+
   return (
-    <div className="flex-1 bg-[#0c0d12] flex flex-col items-center justify-between p-4 overflow-hidden relative select-none">
+    <div 
+      ref={playerContainerRef}
+      className={`flex-1 bg-[#0c0d12] flex flex-col items-center justify-between p-4 overflow-hidden relative select-none ${
+        isFullscreen ? 'fixed inset-0 z-50 p-6' : ''
+      }`}
+    >
       {/* Background Audio Players for Track-Audio clips */}
       {activeAudioClips.map((audioClip) => (
         <AudioTrackPlayer
@@ -143,34 +236,95 @@ export const Player: React.FC<PlayerProps> = ({
 
       {/* Viewport Area */}
       <div 
-        ref={containerRef}
         className="w-full flex-1 flex items-center justify-center relative min-h-0"
       >
         <div 
-          className={`relative bg-black rounded-xl overflow-hidden border border-[#232533] shadow-2xl shadow-black flex items-center justify-center ${getAspectRatioClasses()}`}
+          ref={viewportRef}
+          onClick={() => {
+            if (activeVideoClip && onSelectClip) {
+              onSelectClip(activeVideoClip.id);
+            }
+          }}
+          className={`relative bg-black rounded-xl overflow-hidden border border-[#232533] shadow-2xl shadow-black flex items-center justify-center cursor-pointer ${getAspectRatioClasses()}`}
           style={{ maxWidth: '100%' }}
         >
-          {/* Video Layer */}
+          {/* Visual Layer: Video or Image */}
           {activeVideoClip && activeVideoClip.source ? (
-            <video
-              ref={videoRef}
-              src={activeVideoClip.source}
-              className="w-full h-full object-contain pointer-events-none transition-transform"
-              style={{
-                filter: getFilterStyle(activeVideoClip.filter),
-                transform: `scale(${activeVideoClip.scale}) translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) rotate(${activeVideoClip.rotation}deg)`,
-                opacity: activeVideoClip.opacity * calculateFadeMultiplier(activeVideoClip, currentTime)
-              }}
-              playsInline
-            />
+            activeVideoClip.type === 'image' ? (
+              <img
+                src={activeVideoClip.source}
+                alt={activeVideoClip.title}
+                className="w-full h-full object-contain pointer-events-none transition-transform"
+                style={{
+                  filter: getFilterStyle(activeVideoClip.filter),
+                  transform: `translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) scale(${activeVideoClip.scale}) rotate(${activeVideoClip.rotation}deg)`,
+                  opacity: activeVideoClip.opacity * calculateFadeMultiplier(activeVideoClip, currentTime)
+                }}
+              />
+            ) : (
+              <video
+                ref={videoRef}
+                src={activeVideoClip.source}
+                className="w-full h-full object-contain pointer-events-none transition-transform"
+                style={{
+                  filter: getFilterStyle(activeVideoClip.filter),
+                  transform: `translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) scale(${activeVideoClip.scale}) rotate(${activeVideoClip.rotation}deg)`,
+                  opacity: activeVideoClip.opacity * calculateFadeMultiplier(activeVideoClip, currentTime)
+                }}
+                playsInline
+              />
+            )
           ) : (
             <div className="flex flex-col items-center justify-center text-zinc-600 gap-2 p-6 text-center">
               <div className="w-12 h-12 rounded-full border border-dashed border-zinc-700 flex items-center justify-center">
                 <Play className="w-5 h-5 text-zinc-600 ml-0.5" />
               </div>
               <span className="text-xs font-medium text-zinc-500">
-                Arraste ou adicione clipes na Timeline abaixo
+                Arraste arquivos ou adicione clipes na Timeline abaixo
               </span>
+            </div>
+          )}
+
+          {/* Interactive Bounding Box / Gizmo for Visual Element (Video/Image) */}
+          {isVisualSelected && onUpdateClip && (
+            <div
+              className="absolute inset-0 pointer-events-auto cursor-move select-none z-10"
+              style={{
+                transform: `translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) scale(${activeVideoClip.scale}) rotate(${activeVideoClip.rotation}deg)`,
+                transformOrigin: 'center center'
+              }}
+              onMouseDown={(e) => handleStartGizmoDrag(e, activeVideoClip, 'move')}
+            >
+              {/* Glowing Dashed Border */}
+              <div className="absolute inset-0 border-2 border-dashed border-cyan-400/90 pointer-events-none shadow-[0_0_15px_rgba(6,182,212,0.6)]">
+                {/* Title and Scale Tag */}
+                <div className="absolute -top-7 left-0 bg-cyan-500 text-black font-extrabold text-[10px] px-2 py-0.5 rounded shadow flex items-center gap-1">
+                  <span>{activeVideoClip.type === 'image' ? 'IMAGEM' : 'VÍDEO'}</span>
+                  <span className="opacity-75 font-mono">{Math.round(activeVideoClip.scale * 100)}%</span>
+                </div>
+              </div>
+
+              {/* 4 Corner Resize Handles */}
+              <div
+                onMouseDown={(e) => handleStartGizmoDrag(e, activeVideoClip, 'scale')}
+                className="absolute -top-2.5 -left-2.5 w-5 h-5 bg-white border-2 border-cyan-500 rounded cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
+                title="Arrastar para Redimensionar (Escala)"
+              />
+              <div
+                onMouseDown={(e) => handleStartGizmoDrag(e, activeVideoClip, 'scale')}
+                className="absolute -top-2.5 -right-2.5 w-5 h-5 bg-white border-2 border-cyan-500 rounded cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
+                title="Arrastar para Redimensionar (Escala)"
+              />
+              <div
+                onMouseDown={(e) => handleStartGizmoDrag(e, activeVideoClip, 'scale')}
+                className="absolute -bottom-2.5 -right-2.5 w-5 h-5 bg-white border-2 border-cyan-500 rounded cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
+                title="Arrastar para Redimensionar (Escala)"
+              />
+              <div
+                onMouseDown={(e) => handleStartGizmoDrag(e, activeVideoClip, 'scale')}
+                className="absolute -bottom-2.5 -left-2.5 w-5 h-5 bg-white border-2 border-cyan-500 rounded cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
+                title="Arrastar para Redimensionar (Escala)"
+              />
             </div>
           )}
 
@@ -178,6 +332,8 @@ export const Player: React.FC<PlayerProps> = ({
           {activeTextClips.map((textClip) => {
             const props = textClip.textProps;
             if (!props) return null;
+
+            const isTextSelected = selectedClip?.id === textClip.id;
 
             let styleClasses = 'text-white font-bold drop-shadow-md';
             if (props.style === 'capcut-yellow') {
@@ -193,21 +349,46 @@ export const Player: React.FC<PlayerProps> = ({
             return (
               <div
                 key={textClip.id}
-                className="absolute inset-x-0 px-6 flex justify-center pointer-events-none z-20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onSelectClip) onSelectClip(textClip.id);
+                }}
+                className="absolute inset-x-0 px-6 flex justify-center z-20 pointer-events-auto cursor-pointer"
                 style={{
                   bottom: props.style === 'capcut-yellow' ? '12%' : '18%',
-                  transform: `scale(${textClip.scale})`,
+                  transform: `translate(${textClip.posX}%, ${textClip.posY}%) scale(${textClip.scale})`,
                   opacity: calculateFadeMultiplier(textClip, currentTime)
                 }}
               >
                 <div
-                  className={`text-center text-xl sm:text-2xl transition-all duration-75 select-none ${styleClasses}`}
+                  onMouseDown={isTextSelected && onUpdateClip ? (e) => handleStartGizmoDrag(e, textClip, 'move') : undefined}
+                  className={`text-center text-xl sm:text-2xl transition-all duration-75 select-none relative ${styleClasses} ${
+                    isTextSelected
+                      ? 'ring-2 ring-cyan-400 ring-offset-2 ring-offset-black/60 shadow-[0_0_15px_rgba(6,182,212,0.8)] cursor-move'
+                      : ''
+                  }`}
                   style={{
                     color: props.color,
                     fontSize: `${props.fontSize}px`
                   }}
                 >
                   {props.content}
+
+                  {/* Corner handles for selected text */}
+                  {isTextSelected && onUpdateClip && (
+                    <>
+                      <div
+                        onMouseDown={(e) => handleStartGizmoDrag(e, textClip, 'scale')}
+                        className="absolute -top-2 -left-2 w-3.5 h-3.5 bg-white border border-cyan-500 rounded-sm cursor-nwse-resize shadow"
+                        title="Redimensionar Texto"
+                      />
+                      <div
+                        onMouseDown={(e) => handleStartGizmoDrag(e, textClip, 'scale')}
+                        className="absolute -bottom-2 -right-2 w-3.5 h-3.5 bg-white border border-cyan-500 rounded-sm cursor-nwse-resize shadow"
+                        title="Redimensionar Texto"
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -216,7 +397,7 @@ export const Player: React.FC<PlayerProps> = ({
       </div>
 
       {/* Playback Controls Bar */}
-      <div className="h-12 w-full max-w-xl bg-[#161820] border border-[#262835] rounded-xl px-4 flex items-center justify-between shadow-lg mt-2">
+      <div className="h-12 w-full max-w-xl bg-[#161820] border border-[#262835] rounded-xl px-4 flex items-center justify-between shadow-lg mt-2 z-20">
         {/* Left: Timecode */}
         <div className="flex items-center gap-1 font-mono text-xs text-zinc-300">
           <span className="text-cyan-400 font-bold">{formatTimecode(currentTime)}</span>
@@ -255,14 +436,28 @@ export const Player: React.FC<PlayerProps> = ({
           </button>
         </div>
 
-        {/* Right: Quick Tools */}
-        <div className="flex items-center gap-2 text-zinc-400">
+        {/* Right: Quick Tools & Fullscreen */}
+        <div className="flex items-center gap-1.5 text-zinc-400">
           <button
             onClick={() => onSeek(0)}
             className="p-1.5 hover:text-white hover:bg-[#232533] rounded-lg transition-colors cursor-pointer"
-            title="Voltar ao Início"
+            title="Voltar ao Início (Home)"
           >
             <RotateCcw className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={handleToggleFullscreen}
+            className={`p-1.5 hover:text-cyan-300 hover:bg-[#232533] rounded-lg transition-colors cursor-pointer ${
+              isFullscreen ? 'text-cyan-400 bg-cyan-500/20' : ''
+            }`}
+            title={isFullscreen ? 'Sair da Tela Cheia (F)' : 'Tela Cheia (F)'}
+          >
+            {isFullscreen ? (
+              <Minimize className="w-4 h-4" />
+            ) : (
+              <Maximize className="w-4 h-4" />
+            )}
           </button>
         </div>
       </div>

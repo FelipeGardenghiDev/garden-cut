@@ -29,6 +29,8 @@ export const Inspector: React.FC<InspectorProps> = ({
   }
 
   const isVideo = selectedClip.type === 'video';
+  const isImage = selectedClip.type === 'image';
+  const isVisual = isVideo || isImage;
   const isText = selectedClip.type === 'text';
   const isAudio = selectedClip.type === 'audio';
 
@@ -126,12 +128,58 @@ export const Inspector: React.FC<InspectorProps> = ({
           </div>
         )}
 
-        {/* VIDEO SPECIFIC TRANSFORM CONTROLS */}
-        {isVideo && (
+        {/* VISUAL (VIDEO & IMAGE) TRANSFORM CONTROLS */}
+        {isVisual && (
           <div className="space-y-4">
             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
               Transformação & Posição
             </span>
+
+            {/* Position X / Y */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <div className="flex justify-between text-zinc-400 text-[10px]">
+                  <span>Posição X</span>
+                  <span className="font-mono text-cyan-400">{selectedClip.posX || 0}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={selectedClip.posX || 0}
+                  onChange={(e) =>
+                    onUpdateClip({ ...selectedClip, posX: Number(e.target.value) })
+                  }
+                  className="w-full accent-cyan-400"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-zinc-400 text-[10px]">
+                  <span>Posição Y</span>
+                  <span className="font-mono text-cyan-400">{selectedClip.posY || 0}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={selectedClip.posY || 0}
+                  onChange={(e) =>
+                    onUpdateClip({ ...selectedClip, posY: Number(e.target.value) })
+                  }
+                  className="w-full accent-cyan-400"
+                />
+              </div>
+            </div>
+            {(selectedClip.posX !== 0 || selectedClip.posY !== 0) && (
+              <button
+                onClick={() => onUpdateClip({ ...selectedClip, posX: 0, posY: 0 })}
+                className="w-full py-1 rounded bg-[#14151c] hover:bg-[#20222e] border border-[#2d3040] text-[10px] text-zinc-400 hover:text-cyan-300 font-medium transition-colors cursor-pointer"
+              >
+                Centralizar Posição (0, 0)
+              </button>
+            )}
 
             {/* Scale / Zoom */}
             <div className="space-y-1">

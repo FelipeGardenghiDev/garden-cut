@@ -9,7 +9,8 @@ import {
   Upload, 
   Sliders, 
   Check, 
-  Volume2
+  Volume2,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Clip, VideoFilter, TextStyle } from '../types/editor';
 import { createDemoVideoBlob } from '../utils/media-generator';
@@ -53,21 +54,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const file = files[i];
       const url = URL.createObjectURL(file);
       const isAudio = file.type.startsWith('audio');
+      const isImage = file.type.startsWith('image');
       let waveform: number[] | undefined;
       if (isAudio) {
         waveform = await extractWaveformPeaks(file, 40);
       }
       
       const newClip: Clip = {
-        id: createClipId(`clip_${i}`),
+        id: createClipId(isImage ? 'clip_img' : isAudio ? 'clip_aud' : 'clip_vid'),
         trackId: isAudio ? 'track-audio' : 'track-video',
-        type: isAudio ? 'audio' : 'video',
+        type: isImage ? 'image' : isAudio ? 'audio' : 'video',
         title: file.name,
         start: 0,
-        duration: 5,
+        duration: isImage ? 4 : 5,
         source: url,
         trimStart: 0,
-        trimEnd: 5,
+        trimEnd: isImage ? 4 : 5,
         scale: 1,
         posX: 0,
         posY: 0,
@@ -111,6 +113,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
       fadeIn: 0.5,
       fadeOut: 0.5,
       waveform
+    };
+    onAddClip(newClip);
+  };
+
+  const handleAddStickerClip = (title: string, svgContent: string) => {
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const newClip: Clip = {
+      id: createClipId('sticker'),
+      trackId: 'track-video',
+      type: 'image',
+      title,
+      start: 0,
+      duration: 4,
+      source: url,
+      trimStart: 0,
+      trimEnd: 4,
+      scale: 0.85,
+      posX: 0,
+      posY: 0,
+      rotation: 0,
+      opacity: 1,
+      filter: 'none',
+      volume: 1,
+      speed: 1,
+      muted: true,
+      fadeIn: 0.3,
+      fadeOut: 0.3
     };
     onAddClip(newClip);
   };
@@ -256,8 +286,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="w-full py-4 border-2 border-dashed border-[#343747] hover:border-cyan-500 rounded-xl flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-cyan-300 transition-all bg-[#1e202b]/50 hover:bg-[#1e202b] cursor-pointer"
             >
               <Upload className="w-6 h-6" />
-              <span className="text-xs font-semibold">Importar Vídeo ou Áudio</span>
-              <span className="text-[10px] text-zinc-500">MP4, WEBM, MP3, WAV</span>
+              <span className="text-xs font-semibold">Importar Mídia</span>
+              <span className="text-[10px] text-zinc-500">Vídeos, Áudios ou Imagens (MP4, PNG, JPG, SVG)</span>
             </button>
 
             <div>
@@ -286,6 +316,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     <span className="text-[11px] font-bold text-white z-10">{demo.name}</span>
                     <span className="text-[9px] text-zinc-400 z-10">{demo.dur}s • Som Stereo</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Visual Logos & Stickers */}
+            <div className="pt-2 border-t border-[#262835]">
+              <div className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Logos & Stickers Rápidos</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  {
+                    name: 'Logo GardenCut',
+                    desc: 'Emblema Neon',
+                    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90" width="320" height="90"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06b6d4" /><stop offset="50%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#a855f7" /></linearGradient></defs><rect x="5" y="5" width="310" height="80" rx="18" fill="#14151f" stroke="#06b6d4" stroke-width="2.5"/><circle cx="45" cy="45" r="22" fill="url(#g1)" /><path d="M40 33 L55 45 L40 57 Z" fill="#ffffff" /><text x="78" y="53" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="28" letter-spacing="1">GardenCut</text></svg>'
+                  },
+                  {
+                    name: 'Selo Ao Vivo',
+                    desc: 'Badge Vermelho',
+                    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 65" width="200" height="65"><rect x="4" y="4" width="192" height="57" rx="28" fill="#e11d48" /><circle cx="34" cy="32" r="10" fill="#ffffff" /><text x="56" y="43" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="28" letter-spacing="2">AO VIVO</text></svg>'
+                  },
+                  {
+                    name: 'Inscreva-se',
+                    desc: 'Botão YouTube',
+                    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 70" width="260" height="70"><rect x="3" y="3" width="254" height="64" rx="32" fill="#ef4444" /><polygon points="36,23 54,35 36,47" fill="#ffffff"/><text x="64" y="44" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="22" letter-spacing="1">INSCREVA-SE</text></svg>'
+                  },
+                  {
+                    name: 'Verificado',
+                    desc: 'Selo Oficial',
+                    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70" width="70" height="70"><circle cx="35" cy="35" r="30" fill="#06b6d4" stroke="#ffffff" stroke-width="2"/><path d="M22 35 L31 44 L48 26" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                  }
+                ].map((sticker, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleAddStickerClip(sticker.name, sticker.svg)}
+                    className="p-2.5 rounded-lg border border-[#2e3040] hover:border-pink-500/80 bg-[#161722] hover:bg-[#1c1d2b] cursor-pointer transition-all flex flex-col justify-between group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-bold text-zinc-200 group-hover:text-pink-300 transition-colors">
+                        {sticker.name}
+                      </span>
+                      <div className="w-5 h-5 rounded-full bg-[#202230] group-hover:bg-pink-500 text-zinc-400 group-hover:text-black flex items-center justify-center transition-all">
+                        <Plus className="w-3 h-3" />
+                      </div>
+                    </div>
+                    <span className="text-[9px] text-zinc-500">{sticker.desc}</span>
                   </div>
                 ))}
               </div>

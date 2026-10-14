@@ -7,7 +7,8 @@ import {
   Square, 
   Magnet, 
   Undo2, 
-  Redo2
+  Redo2,
+  Keyboard
 } from 'lucide-react';
 import { AspectRatio } from '../types/editor';
 
@@ -23,6 +24,7 @@ interface HeaderProps {
   canRedo: boolean;
   saveStatus?: 'saved' | 'saving' | 'idle';
   onResetProject?: () => void;
+  onOpenShortcuts?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,7 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
   canUndo,
   canRedo,
   saveStatus = 'idle',
-  onResetProject
+  onResetProject,
+  onOpenShortcuts
 }) => {
   return (
     <header className="h-14 bg-[#14151b] border-b border-[#232530] px-4 flex items-center justify-between select-none z-30">
@@ -156,6 +159,18 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
         </div>
+
+        {onOpenShortcuts && (
+          <button
+            onClick={onOpenShortcuts}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#2b2d3c] bg-[#1a1b24] hover:bg-[#252836] text-zinc-300 hover:text-white transition-all text-xs font-medium cursor-pointer"
+            title="Guia de Atalhos do Teclado (?)"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Atalhos</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-[#252834] font-mono text-[10px] text-zinc-400">?</kbd>
+          </button>
+        )}
 
         <button
           onClick={onOpenExport}

@@ -5,11 +5,13 @@ import { Player } from './components/Player';
 import { Timeline } from './components/Timeline';
 import { Inspector } from './components/Inspector';
 import { ExportModal } from './components/ExportModal';
+import { ShortcutsModal } from './components/ShortcutsModal';
 import { AspectRatio, Clip, VideoFilter } from './types/editor';
 import { createDemoVideoBlob } from './utils/media-generator';
 import { generateLofiBeatAudioBlob } from './utils/audio-engine';
 import { saveProjectToStorage, loadProjectFromStorage, clearProjectStorage } from './utils/project-storage';
-import { generateProceduralWaveform } from './utils/waveform-generator';
+import { generateProceduralWaveform, extractWaveformPeaks } from './utils/waveform-generator';
+import { UploadCloud } from 'lucide-react';
 
 export function App() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
@@ -20,6 +22,8 @@ export function App() {
   const [isSnapping, setIsSnapping] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'media' | 'text' | 'effects' | 'ai' | 'audio'>('media');
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
 
@@ -253,6 +257,94 @@ export function App() {
     }
   };
 
+  // Keyboard shortcut: '?' for Shortcuts Guide
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Native OS Drag & Drop Handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const newClips: Clip[] = [];
+    let currentOffset = currentTime;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const url = URL.createObjectURL(file);
+      const isAudio = file.type.startsWith('audio');
+      const isImage = file.type.startsWith('image');
+      const duration = isImage ? 4 : 5;
+
+      let waveform: number[] | undefined;
+      if (isAudio) {
+        waveform = await extractWaveformPeaks(file, 40);
+      }
+
+      const clip: Clip = {
+        id: `drop_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+        trackId: isAudio ? 'track-audio' : 'track-video',
+        type: isImage ? 'image' : isAudio ? 'audio' : 'video',
+        title: file.name,
+        start: currentOffset,
+        duration,
+        source: url,
+        trimStart: 0,
+        trimEnd: duration,
+        scale: 1,
+        posX: 0,
+        posY: 0,
+        rotation: 0,
+        opacity: 1,
+        filter: 'none',
+        volume: 1,
+        speed: 1,
+        muted: false,
+        fadeIn: 0.3,
+        fadeOut: 0.3,
+        waveform
+      };
+
+      newClips.push(clip);
+      if (!isAudio) {
+        currentOffset += duration;
+      }
+    }
+
+    if (newClips.length > 0) {
+      const nextClips = [...clips, ...newClips];
+      setClips(nextClips);
+      setSelectedClipId(newClips[0].id);
+      pushHistory(nextClips);
+    }
+  };
+
   // Playback loop with requestAnimationFrame
   useEffect(() => {
     let animId: number;
@@ -456,7 +548,12 @@ export function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0c0d12] text-white">
+    <div 
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="flex flex-col h-screen w-screen overflow-hidden bg-[#0c0d12] text-white relative"
+    >
       {/* 1. Header Bar */}
       <Header
         aspectRatio={aspectRatio}
@@ -470,6 +567,7 @@ export function App() {
         canRedo={historyIndex < history.length - 1}
         saveStatus={saveStatus}
         onResetProject={handleResetProject}
+        onOpenShortcuts={() => setIsShortcutsOpen(true)}
       />
 
       {/* 2. Middle Work Area */}
@@ -496,6 +594,9 @@ export function App() {
           activeVideoClip={activeVideoClip}
           activeTextClips={activeTextClips}
           activeAudioClips={activeAudioClips}
+          selectedClip={selectedClip}
+          onUpdateClip={handleUpdateClip}
+          onSelectClip={setSelectedClipId}
         />
 
         {/* Right: Clip Properties Inspector */}
@@ -529,6 +630,32 @@ export function App() {
         clips={clips}
         totalDuration={totalDuration}
       />
+
+      {/* 5. Keyboard Shortcuts Modal */}
+      <ShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      {/* 6. Drag & Drop File Upload Overlay */}
+      {isDraggingOver && (
+        <div className="fixed inset-0 bg-cyan-950/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-8 pointer-events-none select-none">
+          <div className="border-4 border-dashed border-cyan-400 rounded-3xl w-full h-full max-w-3xl max-h-[70vh] flex flex-col items-center justify-center gap-4 bg-[#121524]/90 shadow-2xl animate-pulse">
+            <div className="w-20 h-20 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.5)]">
+              <UploadCloud className="w-10 h-10 text-cyan-300" />
+            </div>
+            <h2 className="text-2xl font-black text-white tracking-wide">
+              Solte os arquivos para importar
+            </h2>
+            <p className="text-sm text-zinc-300 font-medium">
+              Suporta Vídeos (.mp4, .webm), Áudios (.mp3, .wav) e Imagens (.png, .jpg, .svg)
+            </p>
+            <span className="text-xs text-cyan-400 font-mono font-bold px-3 py-1 bg-cyan-950/60 rounded-full border border-cyan-500/30">
+              Arrastar direto do Desktop ou Pastas
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

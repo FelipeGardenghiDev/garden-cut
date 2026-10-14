@@ -1,6 +1,6 @@
 export type AspectRatio = '16:9' | '9:16' | '1:1' | '4:5';
 
-export type ClipType = 'video' | 'audio' | 'text';
+export type ClipType = 'video' | 'audio' | 'text' | 'image';
 
 export type VideoFilter = 'none' | 'cinematic' | 'vibrant' | 'bw' | 'vintage' | 'cyberpunk' | 'blur';
 

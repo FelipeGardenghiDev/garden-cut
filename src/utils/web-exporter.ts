@@ -125,6 +125,26 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
   const totalFrames = Math.max(1, Math.round(totalDuration * fps));
   let currentFrame = 0;
 
+  // Preload image elements for any image clips
+  const imageElements = new Map<string, HTMLImageElement>();
+  const imageClips = clips.filter((c) => c.type === 'image' && c.source);
+  await Promise.all(
+    imageClips.map((clip) => {
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          imageElements.set(clip.id, img);
+          resolve();
+        };
+        img.onerror = () => {
+          resolve();
+        };
+        img.src = clip.source;
+      });
+    })
+  );
+
   return new Promise((resolve, reject) => {
     mediaRecorder.onerror = (err) => {
       audioCtx.close().catch(() => {});
@@ -196,6 +216,39 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
       }
 
       ctx.restore();
+
+      // 2.1 Render Active Image Clips (Logos / Overlays / Stickers)
+      const activeImages = clips.filter(
+        (c) => c.type === 'image' && currentTime >= c.start && currentTime < c.start + c.duration
+      );
+
+      for (const activeImg of activeImages) {
+        const imgEl = imageElements.get(activeImg.id);
+        if (!imgEl) continue;
+
+        ctx.save();
+        applyCanvasFilter(ctx, activeImg.filter || 'none');
+        const imgFade = calculateFadeMultiplier(activeImg, currentTime);
+        ctx.globalAlpha = (activeImg.opacity ?? 1) * imgFade;
+
+        const posX = width / 2 + (activeImg.posX * width) / 100;
+        const posY = height / 2 + (activeImg.posY * height) / 100;
+
+        ctx.translate(posX, posY);
+        ctx.rotate((activeImg.rotation * Math.PI) / 180);
+        ctx.scale(activeImg.scale, activeImg.scale);
+
+        const imgAspect = (imgEl.naturalWidth || 1) / (imgEl.naturalHeight || 1);
+        let targetW = width * 0.6;
+        let targetH = targetW / imgAspect;
+        if (targetH > height * 0.6) {
+          targetH = height * 0.6;
+          targetW = targetH * imgAspect;
+        }
+
+        ctx.drawImage(imgEl, -targetW / 2, -targetH / 2, targetW, targetH);
+        ctx.restore();
+      }
 
       // 3. Render Active Text Subtitles / Overlays
       const activeTexts = clips.filter(

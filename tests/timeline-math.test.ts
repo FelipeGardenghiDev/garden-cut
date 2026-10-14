@@ -316,5 +316,33 @@ describe('timeline-math utility', () => {
       const clipWithoutFade = { start: 0, duration: 5 };
       expect(calculateFadeMultiplier(clipWithoutFade, 2.5)).toBe(1);
     });
+
+    it('accurately calculates fade multiplier for image clips', () => {
+      const imageClip: Clip = {
+        id: 'img1',
+        trackId: 'track-video',
+        type: 'image',
+        title: 'Logo Overlay',
+        start: 1,
+        duration: 4,
+        source: 'data:image/svg+xml,...',
+        trimStart: 0,
+        trimEnd: 4,
+        scale: 1,
+        posX: 0,
+        posY: 0,
+        rotation: 0,
+        opacity: 1,
+        filter: 'none',
+        volume: 1,
+        speed: 1,
+        muted: true,
+        fadeIn: 0.5,
+        fadeOut: 0.5
+      };
+      expect(getActiveClipsAtTime([imageClip], 2)).toHaveLength(1);
+      expect(getActiveClipsAtTime([imageClip], 5.5)).toHaveLength(0);
+      expect(calculateFadeMultiplier(imageClip, 1.25)).toBe(0.5);
+    });
   });
 });
