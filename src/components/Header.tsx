@@ -7,9 +7,7 @@ import {
   Square, 
   Magnet, 
   Undo2, 
-  Redo2, 
-  Sparkles,
-  Layers
+  Redo2
 } from 'lucide-react';
 import { AspectRatio } from '../types/editor';
 

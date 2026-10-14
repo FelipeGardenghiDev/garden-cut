@@ -1,13 +1,6 @@
 import React from 'react';
 import { 
   Sliders, 
-  RotateCw, 
-  Eye, 
-  Volume2, 
-  FastForward, 
-  Type, 
-  Palette,
-  Maximize2,
   X
 } from 'lucide-react';
 import { Clip, VideoFilter, TextStyle } from '../types/editor';

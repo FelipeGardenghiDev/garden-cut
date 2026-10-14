@@ -125,28 +125,4 @@ export async function createDemoVideoBlob(
   });
 }
 
-/**
- * Format seconds to standard Timecode `MM:SS:FF`
- */
-export function formatTimecode(seconds: number, fps = 30): string {
-  const safeSec = Math.max(0, seconds);
-  const mins = Math.floor(safeSec / 60);
-  const secs = Math.floor(safeSec % 60);
-  const frames = Math.floor((safeSec % 1) * fps);
-
-  const mm = String(mins).padStart(2, '0');
-  const ss = String(secs).padStart(2, '0');
-  const ff = String(frames).padStart(2, '0');
-
-  return `${mm}:${ss}:${ff}`;
-}
-
-/**
- * Format seconds to simple display time `00:05`
- */
-export function formatSeconds(seconds: number): string {
-  const safeSec = Math.max(0, seconds);
-  const mins = Math.floor(safeSec / 60);
-  const secs = Math.floor(safeSec % 60);
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
+export { formatTimecode, formatSeconds } from './timeline-math';

@@ -1,51 +1,118 @@
 # GardenCut 🌿✂️
 
-> Editor de vídeos moderno estilo CapCut para PC, 100% gratuito, com áudio multi-trilha real, aceleração por hardware via FFmpeg e preparado para Rust/Tauri.
+[![CI - Quality Gate](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml/badge.svg)](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/Vitest-19%20passed-emerald?style=flat&logo=vitest)
+![Linter](https://img.shields.io/badge/Oxlint-0%20warnings-cyan?style=flat)
+![React](https://img.shields.io/badge/React-19-blue?style=flat&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6?style=flat&logo=typescript)
+
+> Editor de vídeos não-linear moderno e de alta performance no estilo CapCut, desenvolvido com React 19, Web Audio API procedural, renderização client-side via HTML5 Canvas + MediaRecorder e suporte desktop via Rust / Tauri 2.0.
 
 ---
 
-## 🚀 Funcionalidades do MVP
+## 🏗️ Arquitetura do Sistema
 
-* **Interface Dark Moderna (Estilo CapCut):**
-  * Alternador de Proporção: **16:9** (Widescreen/YouTube), **9:16** (TikTok, Reels, Shorts), **1:1** (Instagram).
-  * Timeline Magnética com alinhamento inteligente.
-  * Undo / Redo (`Ctrl+Z` / `Ctrl+Y`).
-* **Sistema de Áudio Real & Multi-Trilhas (Web Audio Synthesizer):**
-  * **Trilha Lo-Fi Beat**: Sintetizador musical lo-fi embutido (bateria, acordes de teclado, linha de baixo).
+```mermaid
+flowchart TD
+    subgraph UI ["Camada de Interface (React 19 + Tailwind CSS)"]
+        Header["Header (Proporções, Snapping, Undo/Redo)"]
+        Sidebar["Sidebar (Mídia, Textos, SFX, IA)"]
+        PlayerView["Player Viewport (Filtros CSS, Canvas 2D)"]
+        TimelineView["Timeline Magnética (Régua, Multitrilha, Splitting)"]
+    end
+
+    subgraph Core ["Motor de Negócio & Utilidades"]
+        TimelineMath["Timeline Math (Snapping, Splitting, Timecode)"]
+        AudioEngine["Web Audio Synthesizer (Lo-Fi, SFX, PCM WAV)"]
+        MediaGen["Procedural Media Generator"]
+    end
+
+    subgraph ExportEngines ["Motores de Exportação"]
+        WebExporter["Client-Side Web Exporter (Canvas Capture + MediaRecorder)"]
+        FFmpegEngine["Local FFmpeg Engine (GPU Acceleration NVENC/AMF)"]
+    end
+
+    UI --> Core
+    Core --> WebExporter
+    Core --> FFmpegEngine
+    WebExporter --> DirectDownload["Download Direto (.webm)"]
+    FFmpegEngine --> DiskExport["Arquivo em Disco (.mp4)"]
+```
+
+---
+
+## 🚀 Funcionalidades Principais
+
+* **Interface Dark Moderna & Responsiva:**
+  * Proporções de aspecto dinâmicas: **16:9** (YouTube), **9:16** (TikTok, Reels, Shorts), **1:1** (Instagram).
+  * Timeline Magnética com atração inteligente por snapping e guias visuais.
+  * Histórico completo de Undo / Redo (`Ctrl+Z` / `Ctrl+Y`).
+* **Síntese de Áudio Procedural (Web Audio API):**
+  * **Trilha Lo-Fi Beat**: Sintetizador procedural embutido com acordes (Fmaj7, Em7, Dm7, Cmaj7), bateria e baixo.
   * **Efeitos Sonoros Reais (SFX)**: *Whoosh*, *Ding de Sucesso*, *Pop Click*, *Bass Drop 808*.
-  * **Clipes com Som Embutido**: Vídeos gerados e importados reproduzem som estéreo sincronizado.
+  * Conversão de `AudioBuffer` em PCM 16-bit WAV válido via DataView.
 * **Player em Tempo Real com Multi-Camadas:**
-  * Renderização de vídeo com transformações ao vivo: **Escala/Zoom**, **Posição**, **Rotação**, **Opacidade**.
-  * Filtros de Cor: *Cinematográfico*, *Vibrante*, *Cyberpunk*, *Vintage*, *Preto & Branco* e *Blur*.
-  * Timecode milimétrico (`MM:SS:FF`) e controles ágeis de reprodução (Espaço para Play/Pause).
-* **Timeline Não-Linear Multi-Trilhas:**
-  * **Trilha de Legendas & Texto**: Overlays dinâmicos posicionáveis.
-  * **Trilha de Vídeo Principal**: Clipes com miniaturas, corte e redimensionamento.
-  * **Trilha de Áudio & SFX**: Músicas e efeitos sonoros com volume individual e sincronização ao vivo.
-  * Ferramenta de **Corte / Split (`Ctrl + B`)** no ponto exato da agulha (*playhead*).
-  * Slider de Zoom contínuo na régua de tempo.
-* **Ferramentas Inteligentes de IA (GardenCut AI):**
-  * **Auto-Legendas**: Geração instantânea de legendas dinâmicas em amarelo vibrante estilo Shorts/Reels.
-  * **Corte Inteligente de Silêncio**: Remoção automática de respirações e pausas sem áudio.
-* **Motor de Renderização Duplo:**
-  * **FFmpeg 8.1 Nativo**: Exporta arquivos `.mp4` reais com aceleração por GPU (NVENC/AMF) salvos na pasta `/exports`.
-  * **Web MediaRecorder**: Exportação direta no navegador com download imediato.
+  * Transformações visuais em tempo real: **Escala**, **Posição X/Y**, **Rotação** e **Opacidade**.
+  * Filtros de Cor via Canvas e CSS: *Cinematic*, *Vibrant*, *Vintage*, *Cyberpunk*, *Preto & Branco* e *Blur*.
+  * Timecode milimétrico (`MM:SS:FF`) e controles por atalhos de teclado.
+* **Timeline Não-Linear com Snapping & Split:**
+  * Trilhas separadas para **Texto/Legendas**, **Vídeo Principal** e **Áudio/SFX**.
+  * Ferramenta de **Corte / Split (`Ctrl + B`)** calculando matematicamente os novos `trimStart` e `trimEnd`.
+* **Exportação Dupla com Download Real no Navegador:**
+  * **Web MediaRecorder (Client-Side)**: Grava diretamente os frames renderizados e áudio no cliente, gerando arquivos para download imediato sem precisar de nenhum servidor Node ou FFmpeg.
+  * **FFmpeg Nativo**: Suporte para aceleração local por hardware quando executado em ambiente com Node/Tauri.
 
 ---
 
 ## 🛠️ Stack Tecnológica
 
-* **Interface:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Lucide Icons.
-* **Motor de Áudio:** Web Audio API (OfflineAudioContext + Real-time Gain/AudioNodes).
-* **Motor de Mídia:** FFmpeg 8.1 (Local no Windows via Node child_process bridge).
-* **Desktop Nativo:** Configurado para **Rust + Tauri 2.0** (`src-tauri`).
+| Camada | Tecnologia |
+| :--- | :--- |
+| **Framework UI** | React 19 + TypeScript + Vite 8 |
+| **Estilização** | Tailwind CSS v4 |
+| **Áudio** | Web Audio API (OfflineAudioContext + OscillatorNode + BiquadFilter) |
+| **Renderização Web** | HTML5 Canvas + MediaRecorder API (`video/webm;codecs=vp9,opus`) |
+| **Desktop Nativo** | Rust + Tauri 2.0 (`src-tauri`) |
+| **Testes Unitários** | Vitest (19 testes passando com 100% de precisão) |
+| **Linter & Qualidade** | Oxlint (0 avisos, 0 erros em 17 arquivos) |
+| **CI/CD** | GitHub Actions Pipeline automatizada |
 
 ---
 
-## 💻 Como Rodar
+## 🧪 Testes Automatizados & Qualidade de Código
+
+O projeto conta com suíte de testes unitários automatizados validando toda a matemática de corte, snapping, timecode e encoding binário WAV:
 
 ```bash
+# Rodar todos os testes unitários com Vitest
+npm run test
+
+# Rodar testes em modo watch interativo
+npm run test:watch
+
+# Rodar análise estática com Oxlint
+npm run lint
+
+# Checagem de tipagem estrita com TypeScript
+npx tsc -b --noEmit
+
+# Compilação do bundle de produção
+npm run build
+```
+
+---
+
+## 💻 Como Rodar Localmente
+
+```bash
+# 1. Clonar repositório
+git clone https://github.com/FelipeGardenghiDev/garden-cut.git
 cd garden-cut
+
+# 2. Instalar dependências
+npm install
+
+# 3. Iniciar servidor de desenvolvimento
 npm run dev
 ```
 
@@ -53,12 +120,11 @@ Abra no navegador em: **`http://localhost:5173/`**
 
 ### 📦 Compilar como App Desktop Nativo (.exe com Rust / Tauri)
 
-Quando o *Microsoft C++ Build Tools* estiver instalado no Windows:
 ```bash
+# Executar em modo desenvolvimento nativo
 npm run tauri dev
-```
-ou para gerar o instalador `.exe`:
-```bash
+
+# Gerar instalador desktop (.exe / .msi)
 npm run tauri build
 ```
 

@@ -6,8 +6,7 @@ import {
   ZoomOut, 
   Film, 
   Type, 
-  Music, 
-  GripVertical
+  Music
 } from 'lucide-react';
 import { Clip } from '../types/editor';
 import { formatSeconds } from '../utils/media-generator';
@@ -78,15 +77,11 @@ export const Timeline: React.FC<TimelineProps> = ({
   // Scrubbing on the ruler
   const handleRulerMouseDown = (e: React.MouseEvent) => {
     setIsScrubbing(true);
-    handleRulerMove(e);
-  };
-
-  const handleRulerMove = (e: React.MouseEvent | MouseEvent) => {
-    if (!rulerRef.current) return;
-    const rect = rulerRef.current.getBoundingClientRect();
-    const offsetX = Math.max(0, e.clientX - rect.left);
-    const newTime = Math.max(0, offsetX / zoom);
-    onSeek(newTime);
+    if (rulerRef.current) {
+      const rect = rulerRef.current.getBoundingClientRect();
+      const offsetX = Math.max(0, e.clientX - rect.left);
+      onSeek(Math.max(0, offsetX / zoom));
+    }
   };
 
   // Start dragging a clip (Move or Trim)
@@ -116,7 +111,11 @@ export const Timeline: React.FC<TimelineProps> = ({
     const handleMouseMove = (e: MouseEvent) => {
       // 1. Scrubbing Playhead
       if (isScrubbing) {
-        handleRulerMove(e);
+        if (rulerRef.current) {
+          const rect = rulerRef.current.getBoundingClientRect();
+          const offsetX = Math.max(0, e.clientX - rect.left);
+          onSeek(Math.max(0, offsetX / zoom));
+        }
         return;
       }
 
@@ -233,7 +232,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [isScrubbing, dragState, zoom, clips, currentTime, onUpdateClip]);
+  }, [isScrubbing, onSeek, dragState, zoom, clips, currentTime, onUpdateClip]);
 
   // Total width of the timeline canvas
   const timelineDuration = Math.max(totalDuration + 8, 25);

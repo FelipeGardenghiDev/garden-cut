@@ -97,7 +97,7 @@ export function detectSilence(filePath: string, noiseThreshold = -30, minDuratio
   });
 }
 
-export function generateAutoSubtitles(duration: number, topic = 'video'): TextOverlay[] {
+export function generateAutoSubtitles(duration: number, _topic = 'video'): TextOverlay[] {
   // CapCut-style smart auto subtitle phrases
   const templates = [
     ["Fala galera!", "Bem-vindos ao GardenCut.", "O editor de vídeo gratuito."],

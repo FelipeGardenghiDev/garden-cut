@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Player } from './components/Player';
@@ -165,7 +165,8 @@ export function App() {
 
         setClips(initialClips);
         setSelectedClipId(initialClips[2].id);
-        pushHistory(initialClips);
+        setHistory([initialClips]);
+        setHistoryIndex(0);
       } catch (err) {
         console.error('Error creating starter demo clips with audio:', err);
       }
@@ -182,10 +183,10 @@ export function App() {
   );
 
   // History management (Undo/Redo)
-  const pushHistory = (newClips: Clip[]) => {
+  const pushHistory = useCallback((newClips: Clip[]) => {
     setHistory((prev) => [...prev.slice(0, historyIndex + 1), newClips]);
     setHistoryIndex((prev) => prev + 1);
-  };
+  }, [historyIndex]);
 
   const handleUndo = () => {
     if (historyIndex > 0) {

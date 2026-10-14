@@ -21,6 +21,8 @@ import {
   generateLofiBeatAudioBlob
 } from '../utils/audio-engine';
 
+const createClipId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
 interface SidebarProps {
   activeTab: 'media' | 'text' | 'effects' | 'ai' | 'audio';
   onTabChange: (tab: 'media' | 'text' | 'effects' | 'ai' | 'audio') => void;
@@ -52,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const isAudio = file.type.startsWith('audio');
       
       const newClip: Clip = {
-        id: `clip_${Date.now()}_${i}`,
+        id: createClipId(`clip_${i}`),
         trackId: isAudio ? 'track-audio' : 'track-video',
         type: isAudio ? 'audio' : 'video',
         title: file.name,
@@ -79,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleAddDemoClip = async (title: string, startCol: string, endCol: string, duration = 5) => {
     const blobUrl = await createDemoVideoBlob(title, startCol, endCol, duration);
     const newClip: Clip = {
-      id: `clip_demo_${Date.now()}`,
+      id: createClipId('clip_demo'),
       trackId: 'track-video',
       type: 'video',
       title,
@@ -103,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleAddTextPreset = (style: TextStyle, label: string) => {
     const newClip: Clip = {
-      id: `text_${Date.now()}`,
+      id: createClipId('text'),
       trackId: 'track-text',
       type: 'text',
       title: label,
@@ -162,7 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     const newClip: Clip = {
-      id: `sfx_${Date.now()}`,
+      id: createClipId('sfx'),
       trackId: 'track-audio',
       type: 'audio',
       title: name,

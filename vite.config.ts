@@ -5,8 +5,7 @@ import {
   checkFFmpegAvailable,
   startExportJob,
   activeJobs,
-  generateAutoSubtitles,
-  detectSilence
+  generateAutoSubtitles
 } from './src/server/ffmpeg-engine.ts';
 
 function ffmpegApiPlugin(): Plugin {

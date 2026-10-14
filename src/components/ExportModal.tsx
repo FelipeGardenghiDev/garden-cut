@@ -5,12 +5,13 @@ import {
   Cpu, 
   Film, 
   CheckCircle2, 
-  AlertCircle, 
-  Sparkles,
-  Settings2
+  Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AspectRatio, Clip } from '../types/editor';
+import { renderTimelineToVideo } from '../utils/web-exporter';
+
+const generateExportFileName = (prefix: string) => `${prefix}_${Date.now()}.mp4`;
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -33,79 +34,93 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [progress, setProgress] = useState<number>(0);
   const [exportComplete, setExportComplete] = useState<boolean>(false);
   const [exportedFileName, setExportedFileName] = useState<string>('');
-  const [engineType, setEngineType] = useState<'ffmpeg' | 'web'>('ffmpeg');
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [engineType, setEngineType] = useState<'ffmpeg' | 'web'>('web');
 
-  if (!isOpen) return null;
+  const runWebExport = async () => {
+    try {
+      const result = await renderTimelineToVideo({
+        aspectRatio,
+        resolution,
+        fps,
+        clips,
+        totalDuration,
+        onProgress: (p) => setProgress(p)
+      });
+      setProgress(100);
+      setIsExporting(false);
+      setExportComplete(true);
+      setExportedFileName(result.fileName);
+      setDownloadUrl(result.blobUrl);
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+    } catch (err) {
+      console.error('Falha na renderização Web:', err);
+      setIsExporting(false);
+    }
+  };
 
   const handleStartExport = async () => {
     setIsExporting(true);
     setProgress(5);
     setExportComplete(false);
+    setDownloadUrl(null);
+
+    if (engineType === 'web') {
+      await runWebExport();
+      return;
+    }
 
     try {
-      if (engineType === 'ffmpeg') {
-        // Call local FFmpeg engine via Vite API endpoint
-        const response = await fetch('/api/export', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            resolution,
-            aspectRatio,
-            fps,
-            clips,
-            texts: clips.filter(c => c.type === 'text'),
-            exportName: `gardencut_video_${Date.now()}.mp4`
-          })
-        });
+      // Call local FFmpeg engine via Vite API endpoint
+      const response = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resolution,
+          aspectRatio,
+          fps,
+          clips,
+          texts: clips.filter((c) => c.type === 'text'),
+          exportName: generateExportFileName('gardencut_video')
+        })
+      });
 
-        const data = await response.json();
-        if (data.jobId) {
-          // Poll progress
-          const interval = setInterval(async () => {
-            try {
-              const res = await fetch(`/api/export-progress/${data.jobId}`);
-              const jobData = await res.json();
-              if (jobData.progress) {
-                setProgress(jobData.progress);
-              }
-              if (jobData.status === 'done' || jobData.progress >= 100) {
-                clearInterval(interval);
-                setIsExporting(false);
-                setProgress(100);
-                setExportComplete(true);
-                setExportedFileName(jobData.outputFile || 'flowcut_video.mp4');
-                confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-              }
-            } catch {
-              clearInterval(interval);
+      if (!response.ok) {
+        await runWebExport();
+        return;
+      }
+
+      const data = await response.json();
+      if (data.jobId) {
+        // Poll progress
+        const interval = setInterval(async () => {
+          try {
+            const res = await fetch(`/api/export-progress/${data.jobId}`);
+            const jobData = await res.json();
+            if (jobData.progress) {
+              setProgress(jobData.progress);
             }
-          }, 800);
-        } else {
-          fallbackSimulatedExport();
-        }
+            if (jobData.status === 'done' || jobData.progress >= 100) {
+              clearInterval(interval);
+              setIsExporting(false);
+              setProgress(100);
+              setExportComplete(true);
+              setExportedFileName(jobData.outputFile || 'gardencut_video.mp4');
+              confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+            }
+          } catch {
+            clearInterval(interval);
+          }
+        }, 800);
       } else {
-        fallbackSimulatedExport();
+        await runWebExport();
       }
     } catch {
-      fallbackSimulatedExport();
+      await runWebExport();
     }
   };
 
-  const fallbackSimulatedExport = () => {
-    let p = 10;
-    const int = setInterval(() => {
-      p += 15;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(int);
-        setIsExporting(false);
-        setExportComplete(true);
-        setExportedFileName(`gardencut_render_${Date.now()}.mp4`);
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      }
-      setProgress(p);
-    }, 400);
-  };
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -241,6 +256,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <div className="p-2.5 bg-[#121319] rounded-lg border border-[#262835] text-xs font-mono text-zinc-300 break-all max-w-full">
                 {exportedFileName}
               </div>
+              {downloadUrl && (
+                <a
+                  href={downloadUrl}
+                  download={exportedFileName}
+                  className="mt-3 inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-black font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all no-underline cursor-pointer"
+                >
+                  <Download className="w-4 h-4 stroke-[2.5]" />
+                  <span>Baixar Arquivo de Vídeo</span>
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -266,12 +291,24 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </button>
             </>
           ) : (
-            <button
-              onClick={onClose}
-              className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs cursor-pointer shadow-lg shadow-cyan-500/25"
-            >
-              Concluir
-            </button>
+            <div className="flex items-center gap-3">
+              {downloadUrl && (
+                <a
+                  href={downloadUrl}
+                  download={exportedFileName}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-black font-bold text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer no-underline"
+                >
+                  <Download className="w-4 h-4 stroke-[2.5]" />
+                  <span>Baixar Vídeo</span>
+                </a>
+              )}
+              <button
+                onClick={onClose}
+                className="px-6 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs cursor-pointer transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
           )}
         </div>
       </div>
