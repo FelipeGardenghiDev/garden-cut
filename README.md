@@ -1,12 +1,16 @@
 # GardenCut 🌿✂️
 
 [![CI - Quality Gate](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml/badge.svg)](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/Vitest-28%20passed-emerald?style=flat&logo=vitest)
+[![Part of GC Studio](https://img.shields.io/badge/Part%20of-GC%20Studio%20%2F%20Garden%20Apps-06B6D4?style=flat&logo=buffer)](https://github.com/FelipeGardenghiDev/projeto-homestudio)
+![Tests](https://img.shields.io/badge/Vitest-36%20passed-emerald?style=flat&logo=vitest)
+![PWA](https://img.shields.io/badge/PWA-Installable%20%26%20Offline-blueviolet?style=flat)
 ![Linter](https://img.shields.io/badge/Oxlint-0%20warnings-cyan?style=flat)
 ![React](https://img.shields.io/badge/React-19-blue?style=flat&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6?style=flat&logo=typescript)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-3178c6?style=flat&logo=typescript)
 
-> Editor de vídeos não-linear moderno e de alta performance no estilo CapCut, desenvolvido com React 19, Web Audio API procedural, renderização client-side via HTML5 Canvas + MediaRecorder, persistência local via IndexedDB e manipulação direta com Gizmo no Canvas.
+> Editor de vídeos não-linear moderno e de alta performance web-first, com gravador nativo de tela/câmera, equalizador DSP em tempo real, transições visuais, overlays PIP com Gizmo, keyframes de animação, exportador de GIF animado e PWA offline.
+
+> 📄 **Planejamento de Engenharia:** Consulte o [Roadmap Estratégico de Evolução (Pós-V1)](ROADMAP.md).
 
 ---
 
@@ -47,6 +51,24 @@ flowchart TD
 
 ## 🚀 Funcionalidades Principais
 
+* **Gravador de Tela & Câmera Integrado (`ScreenRecorderModal.tsx`):**
+  * Gravação de tela inteira, janelas de aplicativos ou webcam com microfone diretamente no navegador via `getDisplayMedia` e `getUserMedia`.
+  * Visualização prévia da gravação, contador de segundos em tempo real e adição instantânea à timeline.
+* **Equalizador DSP de Áudio em Tempo Real & Analisador de Espectro:**
+  * Presets sonoros instantâneos com filtros biquad: *Normal*, *Bass Boost 808* (+10dB em frequências graves), *Vocal Presence* (destaque de voz humana) e *Lo-Fi Vintage* (filtro passa-faixa com saturação suave).
+  * Espectro animado de frequências reativo ao áudio reproduzido no player.
+* **Transições Visuais Cinematográficas:**
+  * Efeitos matemáticos frame a frame configuráveis no Inspector: *Cross-Dissolve*, *Slide Left*, *Fade to Black* e *Flash White*, renderizados no player e na exportação.
+* **Picture-in-Picture & Trilha Overlay (`track-overlay`):**
+  * Trilha dedicada para sobreposições de vídeo, reações e gameplays.
+  * Manipulação direta pelo Gizmo no canvas com redimensionamento e reposicionamento livre.
+* **Keyframes Temporais Paramétricos:**
+  * Animação contínua com interpolação linear (Lerp) de Escala, Posição X/Y, Rotação e Opacidade ao longo do clipe.
+  * Marcadores visuais em diamante (`◆`) na timeline indicando a presença de keyframes.
+* **Exportador de GIF Animado Client-Side (`gifenc`):**
+  * Renderização de animações leves para redes sociais com quantização de paleta para 256 cores, delay de frames preciso e download de arquivo `.gif`.
+* **PWA & Funcionamento 100% Offline:**
+  * Manifesto de aplicativo web (`manifest.webmanifest`) configurado para instalação nativa no desktop e mobile, operando sem dependência de internet.
 * **Drag & Drop Nativo do Sistema Operacional (OS):**
   * Arraste arquivos de vídeo (`.mp4`, `.webm`), áudio (`.mp3`, `.wav`) e imagens (`.png`, `.jpg`, `.svg`) direto do seu desktop ou explorador de arquivos para a janela do editor.
   * Overlay visual dinâmico com drop-zone animada e processamento automático de waveforms para faixas de áudio.
@@ -80,9 +102,9 @@ flowchart TD
   * **Trilha Lo-Fi Beat**: Sintetizador procedural embutido com acordes (Fmaj7, Em7, Dm7, Cmaj7), bateria e baixo.
   * **Efeitos Sonoros Reais (SFX)**: *Whoosh*, *Ding de Sucesso*, *Pop Click*, *Bass Drop 808*.
   * Conversão de `AudioBuffer` em PCM 16-bit WAV válido via DataView.
-* **Exportação Dupla com Download Real no Navegador:**
-  * **Web MediaRecorder (Client-Side)**: Grava diretamente os frames renderizados e áudio no cliente, gerando arquivos WebM para download imediato sem precisar de nenhum servidor Node ou FFmpeg.
-  * **FFmpeg Nativo**: Suporte para aceleração local por hardware quando executado em ambiente com Node/Tauri.
+* **Exportação Múltipla com Download Real no Navegador:**
+  * **Web MediaRecorder (Client-Side)**: Grava diretamente os frames renderizados e áudio no cliente, gerando arquivos WebM/MP4 para download imediato sem precisar de nenhum servidor Node ou FFmpeg.
+  * **GIF Animado em 256 Cores**: Exportação direta otimizada para loops e redes sociais via `gifenc`.
 
 ---
 
@@ -97,8 +119,10 @@ flowchart TD
 | **Áudio & Waveforms** | Web Audio API + OfflineAudioContext + Peak Analysis |
 | **Renderização Web** | HTML5 Canvas + MediaRecorder API (`video/webm;codecs=vp9,opus`) |
 | **Desktop Nativo** | Rust + Tauri 2.0 (`src-tauri`) |
-| **Testes Unitários** | Vitest (28 testes passando com 100% de precisão) |
-| **Linter & Qualidade** | Oxlint (0 avisos, 0 erros em 21 arquivos) |
+| **Exportação GIF** | `gifenc` (Quantização 256 cores client-side) |
+| **PWA & Offline** | Web App Manifest + Service Worker Ready |
+| **Testes Unitários** | Vitest (36 testes passando com 100% de precisão) |
+| **Linter & Qualidade** | Oxlint (0 avisos, 0 erros em 24 arquivos) |
 | **CI/CD** | GitHub Actions Pipeline automatizada |
 
 ---
