@@ -1,4 +1,5 @@
 import { AspectRatio, Clip, VideoFilter } from '../types/editor';
+import { calculateFadeMultiplier } from './timeline-math';
 
 export interface ExportOptions {
   aspectRatio: AspectRatio;
@@ -163,7 +164,8 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
 
       if (activeVideo) {
         applyCanvasFilter(ctx, activeVideo.filter || 'none');
-        ctx.globalAlpha = activeVideo.opacity ?? 1;
+        const videoFade = calculateFadeMultiplier(activeVideo, currentTime);
+        ctx.globalAlpha = (activeVideo.opacity ?? 1) * videoFade;
 
         // Draw animated gradient backdrop for video clip
         const relTime = currentTime - activeVideo.start;
@@ -207,6 +209,7 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
         const scaledFontSize = Math.round(fontSize * scale);
 
         ctx.save();
+        ctx.globalAlpha = calculateFadeMultiplier(textClip, currentTime);
         ctx.font = `bold ${scaledFontSize}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

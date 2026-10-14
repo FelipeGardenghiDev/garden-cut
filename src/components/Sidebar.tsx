@@ -20,6 +20,7 @@ import {
   generateBassDropBlob,
   generateLofiBeatAudioBlob
 } from '../utils/audio-engine';
+import { generateProceduralWaveform, extractWaveformPeaks } from '../utils/waveform-generator';
 
 const createClipId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
@@ -44,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -52,6 +53,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const file = files[i];
       const url = URL.createObjectURL(file);
       const isAudio = file.type.startsWith('audio');
+      let waveform: number[] | undefined;
+      if (isAudio) {
+        waveform = await extractWaveformPeaks(file, 40);
+      }
       
       const newClip: Clip = {
         id: createClipId(`clip_${i}`),
@@ -71,7 +76,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         filter: 'none',
         volume: 1,
         speed: 1,
-        muted: false
+        muted: false,
+        fadeIn: 0,
+        fadeOut: 0,
+        waveform
       };
 
       onAddClip(newClip);
@@ -80,6 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleAddDemoClip = async (title: string, startCol: string, endCol: string, duration = 5) => {
     const blobUrl = await createDemoVideoBlob(title, startCol, endCol, duration);
+    const waveform = generateProceduralWaveform(40, 'ambient');
     const newClip: Clip = {
       id: createClipId('clip_demo'),
       trackId: 'track-video',
@@ -98,7 +107,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       filter: 'none',
       volume: 1,
       speed: 1,
-      muted: false
+      muted: false,
+      fadeIn: 0.5,
+      fadeOut: 0.5,
+      waveform
     };
     onAddClip(newClip);
   };
@@ -123,6 +135,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       volume: 1,
       speed: 1,
       muted: false,
+      fadeIn: 0.3,
+      fadeOut: 0.3,
       textProps: {
         content: label,
         style,
@@ -163,6 +177,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       dur = 12;
     }
 
+    const waveform = generateProceduralWaveform(40, type === 'lofi' ? 'beat' : 'sfx');
+
     const newClip: Clip = {
       id: createClipId('sfx'),
       trackId: 'track-audio',
@@ -181,7 +197,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       filter: 'none',
       volume: 1,
       speed: 1,
-      muted: false
+      muted: false,
+      fadeIn: 0,
+      fadeOut: type === 'lofi' ? 1.0 : 0,
+      waveform
     };
     onAddClip(newClip);
   };

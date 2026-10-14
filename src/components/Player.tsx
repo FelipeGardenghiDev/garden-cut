@@ -7,7 +7,7 @@ import {
   SkipForward
 } from 'lucide-react';
 import { AspectRatio, Clip } from '../types/editor';
-import { formatTimecode } from '../utils/media-generator';
+import { formatTimecode, calculateFadeMultiplier } from '../utils/timeline-math';
 
 interface PlayerProps {
   aspectRatio: AspectRatio;
@@ -36,7 +36,8 @@ const AudioTrackPlayer: React.FC<{ clip: Clip; currentTime: number; isPlaying: b
       audioRef.current.currentTime = Math.max(0, targetOffset);
     }
 
-    audioRef.current.volume = Math.max(0, Math.min(1, clip.volume));
+    const fadeFactor = calculateFadeMultiplier(clip, currentTime);
+    audioRef.current.volume = Math.max(0, Math.min(1, clip.volume * fadeFactor));
     audioRef.current.muted = clip.muted;
     audioRef.current.playbackRate = clip.speed;
 
@@ -75,7 +76,8 @@ export const Player: React.FC<PlayerProps> = ({
       videoRef.current.currentTime = Math.max(0, clipOffset);
     }
 
-    videoRef.current.volume = Math.max(0, Math.min(1, activeVideoClip.volume));
+    const fadeFactor = calculateFadeMultiplier(activeVideoClip, currentTime);
+    videoRef.current.volume = Math.max(0, Math.min(1, activeVideoClip.volume * fadeFactor));
     videoRef.current.playbackRate = activeVideoClip.speed;
     videoRef.current.muted = activeVideoClip.muted;
 
@@ -157,7 +159,7 @@ export const Player: React.FC<PlayerProps> = ({
               style={{
                 filter: getFilterStyle(activeVideoClip.filter),
                 transform: `scale(${activeVideoClip.scale}) translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) rotate(${activeVideoClip.rotation}deg)`,
-                opacity: activeVideoClip.opacity
+                opacity: activeVideoClip.opacity * calculateFadeMultiplier(activeVideoClip, currentTime)
               }}
               playsInline
             />
@@ -194,7 +196,8 @@ export const Player: React.FC<PlayerProps> = ({
                 className="absolute inset-x-0 px-6 flex justify-center pointer-events-none z-20"
                 style={{
                   bottom: props.style === 'capcut-yellow' ? '12%' : '18%',
-                  transform: `scale(${textClip.scale})`
+                  transform: `scale(${textClip.scale})`,
+                  opacity: calculateFadeMultiplier(textClip, currentTime)
                 }}
               >
                 <div

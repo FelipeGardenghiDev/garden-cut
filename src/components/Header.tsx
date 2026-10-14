@@ -21,6 +21,8 @@ interface HeaderProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  saveStatus?: 'saved' | 'saving' | 'idle';
+  onResetProject?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,7 +34,9 @@ export const Header: React.FC<HeaderProps> = ({
   onUndo,
   onRedo,
   canUndo,
-  canRedo
+  canRedo,
+  saveStatus = 'idle',
+  onResetProject
 }) => {
   return (
     <header className="h-14 bg-[#14151b] border-b border-[#232530] px-4 flex items-center justify-between select-none z-30">
@@ -128,6 +132,31 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right: Actions */}
       <div className="flex items-center gap-3">
+        {/* Persistence Indicator */}
+        <div className="flex items-center gap-2">
+          {saveStatus === 'saving' && (
+            <span className="text-[11px] text-amber-300 flex items-center gap-1.5 animate-pulse font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Salvando...
+            </span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="text-[11px] text-emerald-400 flex items-center gap-1.5 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Salvo
+            </span>
+          )}
+          {onResetProject && (
+            <button
+              onClick={onResetProject}
+              className="text-[11px] text-zinc-400 hover:text-rose-400 px-2.5 py-1 rounded-lg border border-[#2b2d3c] hover:border-rose-500/40 transition-colors cursor-pointer"
+              title="Resetar projeto e limpar dados salvos"
+            >
+              Novo Projeto
+            </button>
+          )}
+        </div>
+
         <button
           onClick={onOpenExport}
           className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-black font-bold text-xs shadow-lg shadow-cyan-500/25 transition-all transform active:scale-95 cursor-pointer"

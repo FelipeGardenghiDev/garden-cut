@@ -43,6 +43,13 @@ export interface Clip {
   speed: number; // 0.5 - 2.0
   muted: boolean;
 
+  // Transitions
+  fadeIn?: number; // Fade In duration in seconds (0 = none)
+  fadeOut?: number; // Fade Out duration in seconds (0 = none)
+
+  // Waveform Peaks (Normalized 0..1 amplitude values)
+  waveform?: number[];
+
   // Text Properties (if type === 'text')
   textProps?: TextProperties;
 }

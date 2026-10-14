@@ -151,3 +151,32 @@ export function getActiveClipsAtTime(clips: Clip[], time: number, trackId?: stri
     return matchesTrack && isWithinTime;
   });
 }
+
+/**
+ * Calculates transition fade multiplier (from 0.0 to 1.0) based on currentTime, fadeIn, and fadeOut.
+ */
+export function calculateFadeMultiplier(
+  clip: { start: number; duration: number; fadeIn?: number; fadeOut?: number },
+  currentTime: number
+): number {
+  if (currentTime < clip.start || currentTime > clip.start + clip.duration) {
+    return 0;
+  }
+
+  const timeInClip = currentTime - clip.start;
+  const timeFromEnd = clip.start + clip.duration - currentTime;
+
+  let multiplier = 1;
+
+  if (clip.fadeIn && clip.fadeIn > 0 && timeInClip < clip.fadeIn) {
+    multiplier = Math.max(0, timeInClip / clip.fadeIn);
+  }
+
+  if (clip.fadeOut && clip.fadeOut > 0 && timeFromEnd < clip.fadeOut) {
+    const fadeOutFactor = Math.max(0, timeFromEnd / clip.fadeOut);
+    multiplier = Math.min(multiplier, fadeOutFactor);
+  }
+
+  return Math.max(0, Math.min(1, multiplier));
+}
+

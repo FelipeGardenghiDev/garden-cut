@@ -264,6 +264,74 @@ export const Inspector: React.FC<InspectorProps> = ({
             </div>
           </div>
         )}
+
+        {/* TRANSITIONS & FADES */}
+        <div className="space-y-3 pt-3 border-t border-[#262835]">
+          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+            Transições & Fade
+          </span>
+
+          {/* Fade In */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-zinc-400">
+              <span>Fade In (Entrada)</span>
+              <span className="font-mono text-cyan-400">{(selectedClip.fadeIn || 0).toFixed(1)}s</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={Math.min(3, Math.max(0.5, selectedClip.duration / 2))}
+              step="0.1"
+              value={selectedClip.fadeIn || 0}
+              onChange={(e) =>
+                onUpdateClip({ ...selectedClip, fadeIn: Number(e.target.value) })
+              }
+              className="w-full accent-cyan-400"
+            />
+          </div>
+
+          {/* Fade Out */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-zinc-400">
+              <span>Fade Out (Saída)</span>
+              <span className="font-mono text-cyan-400">{(selectedClip.fadeOut || 0).toFixed(1)}s</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={Math.min(3, Math.max(0.5, selectedClip.duration / 2))}
+              step="0.1"
+              value={selectedClip.fadeOut || 0}
+              onChange={(e) =>
+                onUpdateClip({ ...selectedClip, fadeOut: Number(e.target.value) })
+              }
+              className="w-full accent-cyan-400"
+            />
+          </div>
+
+          {/* Quick presets */}
+          <div className="grid grid-cols-3 gap-1 pt-1">
+            {[
+              { label: 'Sem Fade', in: 0, out: 0 },
+              { label: 'Rápido', in: 0.5, out: 0.5 },
+              { label: 'Suave', in: 1.0, out: 1.0 }
+            ].map((preset, idx) => (
+              <button
+                key={idx}
+                onClick={() =>
+                  onUpdateClip({
+                    ...selectedClip,
+                    fadeIn: preset.in,
+                    fadeOut: preset.out
+                  })
+                }
+                className="py-1 px-1.5 rounded bg-[#14151c] hover:bg-[#20222e] border border-[#2d3040] text-[10px] text-zinc-400 hover:text-white font-medium transition-colors"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

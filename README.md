@@ -1,12 +1,12 @@
 # GardenCut 🌿✂️
 
 [![CI - Quality Gate](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml/badge.svg)](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/Vitest-19%20passed-emerald?style=flat&logo=vitest)
+![Tests](https://img.shields.io/badge/Vitest-27%20passed-emerald?style=flat&logo=vitest)
 ![Linter](https://img.shields.io/badge/Oxlint-0%20warnings-cyan?style=flat)
 ![React](https://img.shields.io/badge/React-19-blue?style=flat&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6?style=flat&logo=typescript)
 
-> Editor de vídeos não-linear moderno e de alta performance no estilo CapCut, desenvolvido com React 19, Web Audio API procedural, renderização client-side via HTML5 Canvas + MediaRecorder e suporte desktop via Rust / Tauri 2.0.
+> Editor de vídeos não-linear moderno e de alta performance no estilo CapCut, desenvolvido com React 19, Web Audio API procedural, renderização client-side via HTML5 Canvas + MediaRecorder, persistência local via IndexedDB e suporte desktop via Rust / Tauri 2.0.
 
 ---
 
@@ -15,20 +15,23 @@
 ```mermaid
 flowchart TD
     subgraph UI ["Camada de Interface (React 19 + Tailwind CSS)"]
-        Header["Header (Proporções, Snapping, Undo/Redo)"]
+        Header["Header (Proporções, Snapping, Status Salvo, Undo/Redo)"]
         Sidebar["Sidebar (Mídia, Textos, SFX, IA)"]
-        PlayerView["Player Viewport (Filtros CSS, Canvas 2D)"]
-        TimelineView["Timeline Magnética (Régua, Multitrilha, Splitting)"]
+        PlayerView["Player Viewport (Filtros CSS, Fade In/Out, Canvas 2D)"]
+        TimelineView["Timeline Magnética (Waveforms Visuais, Régua, Fades, Splitting)"]
+        InspectorView["Inspector (Transformações, Efeitos, Sliders de Fade In/Out)"]
     end
 
     subgraph Core ["Motor de Negócio & Utilidades"]
-        TimelineMath["Timeline Math (Snapping, Splitting, Timecode)"]
+        TimelineMath["Timeline Math (Snapping, Splitting, Fade Transitions, Timecode)"]
         AudioEngine["Web Audio Synthesizer (Lo-Fi, SFX, PCM WAV)"]
+        WaveformGen["Waveform Generator (Peak Extraction & Normalization)"]
+        ProjectStorage["IndexedDB Storage (Blob Serialization & Auto-Save)"]
         MediaGen["Procedural Media Generator"]
     end
 
     subgraph ExportEngines ["Motores de Exportação"]
-        WebExporter["Client-Side Web Exporter (Canvas Capture + MediaRecorder)"]
+        WebExporter["Client-Side Web Exporter (Canvas Capture + MediaRecorder + Fade Alpha)"]
         FFmpegEngine["Local FFmpeg Engine (GPU Acceleration NVENC/AMF)"]
     end
 
@@ -43,6 +46,17 @@ flowchart TD
 
 ## 🚀 Funcionalidades Principais
 
+* **Persistência Local Completa (IndexedDB):**
+  * Salvamento automático com debounce contínuo (`800ms`) diretamente no IndexedDB do navegador.
+  * Serialização e restauração binária de mídias Blob: ao recarregar a página (`F5`), seu projeto continua intacto.
+  * Indicador de salvamento em tempo real no Header (*"Salvo"* / *"Salvando..."*) e opção de *"Novo Projeto"*.
+* **Formas de Onda de Áudio Visuais (*Audio Waveforms*):**
+  * Renderização de picos de amplitude sonora (*waveforms*) ao longo dos clipes na timeline no estilo Premiere/CapCut.
+  * Extração analítica de picos de `AudioBuffer` decodificados e geração procedural de picos para beats e SFX.
+* **Transições Suaves de Fade In & Fade Out:**
+  * Controles dedicados no painel Inspector para configurar Fade In e Fade Out (0s a 3s) com presets rápidos.
+  * Marcadores triangulares visuais (`◢` e `◣`) nos cantos superiores dos clipes na timeline.
+  * Interpolação suave aplicada em tempo real na opacidade de vídeo, volume de áudio e overlays de legendas (tanto no player quanto na exportação final).
 * **Interface Dark Moderna & Responsiva:**
   * Proporções de aspecto dinâmicas: **16:9** (YouTube), **9:16** (TikTok, Reels, Shorts), **1:1** (Instagram).
   * Timeline Magnética com atração inteligente por snapping e guias visuais.
@@ -70,11 +84,12 @@ flowchart TD
 | :--- | :--- |
 | **Framework UI** | React 19 + TypeScript + Vite 8 |
 | **Estilização** | Tailwind CSS v4 |
-| **Áudio** | Web Audio API (OfflineAudioContext + OscillatorNode + BiquadFilter) |
+| **Persistência** | IndexedDB Nativo (`GardenCut_DB`) com serialização de Blobs |
+| **Áudio & Waveforms** | Web Audio API + OfflineAudioContext + Peak Analysis |
 | **Renderização Web** | HTML5 Canvas + MediaRecorder API (`video/webm;codecs=vp9,opus`) |
 | **Desktop Nativo** | Rust + Tauri 2.0 (`src-tauri`) |
-| **Testes Unitários** | Vitest (19 testes passando com 100% de precisão) |
-| **Linter & Qualidade** | Oxlint (0 avisos, 0 erros em 17 arquivos) |
+| **Testes Unitários** | Vitest (27 testes passando com 100% de precisão) |
+| **Linter & Qualidade** | Oxlint (0 avisos, 0 erros em 20 arquivos) |
 | **CI/CD** | GitHub Actions Pipeline automatizada |
 
 ---

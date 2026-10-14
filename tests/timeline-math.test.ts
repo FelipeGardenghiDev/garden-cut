@@ -5,7 +5,8 @@ import {
   calculateTotalDuration, 
   splitClip, 
   calculateSnapPoint,
-  getActiveClipsAtTime
+  getActiveClipsAtTime,
+  calculateFadeMultiplier
 } from '../src/utils/timeline-math';
 import { Clip } from '../src/types/editor';
 
@@ -279,6 +280,41 @@ describe('timeline-math utility', () => {
       expect(getActiveClipsAtTime(clips, 3, 'track-video')).toHaveLength(1);
       expect(getActiveClipsAtTime(clips, 3, 'track-text')).toHaveLength(1);
       expect(getActiveClipsAtTime(clips, 3, 'track-audio')).toHaveLength(0);
+    });
+  });
+
+  describe('calculateFadeMultiplier', () => {
+    const testClip = {
+      start: 2,
+      duration: 10, // from 2 to 12
+      fadeIn: 2,    // 0 to 2s fade in (t=2..4)
+      fadeOut: 2    // 2s fade out (t=10..12)
+    };
+
+    it('returns 0 when currentTime is before clip start or after clip end', () => {
+      expect(calculateFadeMultiplier(testClip, 1)).toBe(0);
+      expect(calculateFadeMultiplier(testClip, 13)).toBe(0);
+    });
+
+    it('ramps up linearly from 0 to 1 during fadeIn period', () => {
+      expect(calculateFadeMultiplier(testClip, 2)).toBe(0);
+      expect(calculateFadeMultiplier(testClip, 3)).toBe(0.5);
+      expect(calculateFadeMultiplier(testClip, 4)).toBe(1);
+    });
+
+    it('returns 1 during middle of clip outside fade zones', () => {
+      expect(calculateFadeMultiplier(testClip, 7)).toBe(1);
+    });
+
+    it('ramps down linearly from 1 to 0 during fadeOut period', () => {
+      expect(calculateFadeMultiplier(testClip, 10)).toBe(1);
+      expect(calculateFadeMultiplier(testClip, 11)).toBe(0.5);
+      expect(calculateFadeMultiplier(testClip, 12)).toBe(0);
+    });
+
+    it('defaults to 1 if no fadeIn or fadeOut is configured', () => {
+      const clipWithoutFade = { start: 0, duration: 5 };
+      expect(calculateFadeMultiplier(clipWithoutFade, 2.5)).toBe(1);
     });
   });
 });

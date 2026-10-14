@@ -8,6 +8,8 @@ import { ExportModal } from './components/ExportModal';
 import { AspectRatio, Clip, VideoFilter } from './types/editor';
 import { createDemoVideoBlob } from './utils/media-generator';
 import { generateLofiBeatAudioBlob } from './utils/audio-engine';
+import { saveProjectToStorage, loadProjectFromStorage, clearProjectStorage } from './utils/project-storage';
+import { generateProceduralWaveform } from './utils/waveform-generator';
 
 export function App() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
@@ -19,6 +21,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'media' | 'text' | 'effects' | 'ai' | 'audio'>('media');
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
 
   // Clips list on the timeline
   const [clips, setClips] = useState<Clip[]>([]);
@@ -28,11 +31,25 @@ export function App() {
   // Playback timer ref
   const lastTimeRef = useRef<number>(0);
 
-  // Initial starter clips on mount
+  // Initial starter clips or load from IndexedDB on mount
   useEffect(() => {
     let isMounted = true;
     async function initStarterClips() {
       try {
+        // 1. Try loading existing project from IndexedDB
+        const savedProject = await loadProjectFromStorage();
+        if (savedProject && savedProject.clips.length > 0) {
+          if (!isMounted) return;
+          setClips(savedProject.clips);
+          setAspectRatio(savedProject.aspectRatio);
+          setHistory([savedProject.clips]);
+          setHistoryIndex(0);
+          setSelectedClipId(savedProject.clips[0].id);
+          setSaveStatus('saved');
+          return;
+        }
+
+        // 2. Otherwise generate initial demo clips with real audio and waveforms
         const demoUrl1 = await createDemoVideoBlob('GardenCut - Cena 1', '#06b6d4', '#3b82f6', 5);
         const demoUrl2 = await createDemoVideoBlob('Cortes Rápidos & Efeitos', '#8b5cf6', '#ec4899', 5);
         const lofiAudioUrl = await generateLofiBeatAudioBlob(10);
@@ -60,6 +77,8 @@ export function App() {
             volume: 1,
             speed: 1,
             muted: false,
+            fadeIn: 0.4,
+            fadeOut: 0.4,
             textProps: {
               content: 'BEM-VINDOS AO GARDENCUT',
               style: 'capcut-yellow',
@@ -89,6 +108,8 @@ export function App() {
             volume: 1,
             speed: 1,
             muted: false,
+            fadeIn: 0.4,
+            fadeOut: 0.4,
             textProps: {
               content: 'SOM & VÍDEO 100% LOCAL',
               style: 'tiktok',
@@ -118,7 +139,10 @@ export function App() {
             filter: 'none',
             volume: 0.8,
             speed: 1,
-            muted: false
+            muted: false,
+            fadeIn: 0.5,
+            fadeOut: 0.5,
+            waveform: generateProceduralWaveform(40, 'ambient')
           },
           {
             id: 'vid_init_2',
@@ -138,7 +162,10 @@ export function App() {
             filter: 'vibrant',
             volume: 0.8,
             speed: 1,
-            muted: false
+            muted: false,
+            fadeIn: 0.5,
+            fadeOut: 0.5,
+            waveform: generateProceduralWaveform(40, 'ambient')
           },
           // Track 3: Audio with REAL synthesized Lo-Fi Beat!
           {
@@ -159,7 +186,10 @@ export function App() {
             filter: 'none',
             volume: 0.9,
             speed: 1,
-            muted: false
+            muted: false,
+            fadeIn: 0.2,
+            fadeOut: 1.0,
+            waveform: generateProceduralWaveform(50, 'beat')
           }
         ];
 
@@ -167,6 +197,7 @@ export function App() {
         setSelectedClipId(initialClips[2].id);
         setHistory([initialClips]);
         setHistoryIndex(0);
+        setSaveStatus('saved');
       } catch (err) {
         console.error('Error creating starter demo clips with audio:', err);
       }
@@ -175,6 +206,24 @@ export function App() {
     initStarterClips();
     return () => { isMounted = false; };
   }, []);
+
+  // Debounced auto-save to IndexedDB
+  useEffect(() => {
+    if (clips.length === 0) return;
+    const timer = setTimeout(async () => {
+      setSaveStatus('saving');
+      await saveProjectToStorage(clips, aspectRatio);
+      setSaveStatus('saved');
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [clips, aspectRatio]);
+
+  const handleResetProject = async () => {
+    if (window.confirm('Tem certeza que deseja criar um Novo Projeto? As alterações salvas serão limpas.')) {
+      await clearProjectStorage();
+      window.location.reload();
+    }
+  };
 
   // Calculate total timeline duration based on furthest clip end
   const totalDuration = Math.max(
@@ -419,6 +468,8 @@ export function App() {
         onRedo={handleRedo}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
+        saveStatus={saveStatus}
+        onResetProject={handleResetProject}
       />
 
       {/* 2. Middle Work Area */}

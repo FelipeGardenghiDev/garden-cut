@@ -287,15 +287,52 @@ export const Timeline: React.FC<TimelineProps> = ({
           <div className="w-[2px] h-3 bg-white/60 rounded-full" />
         </div>
 
+        {/* Visual Audio Waveform */}
+        {clip.waveform && clip.waveform.length > 0 && (
+          <div className="absolute inset-0 flex items-center justify-around px-3 pointer-events-none opacity-40 overflow-hidden">
+            {clip.waveform.map((peak, idx) => (
+              <div
+                key={idx}
+                className={`w-[2px] rounded-full mx-[0.5px] ${
+                  clip.trackId === 'track-audio' ? 'bg-emerald-300' : 'bg-cyan-200'
+                }`}
+                style={{ height: `${Math.max(15, peak * 80)}%` }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Fade In Indicator */}
+        {clip.fadeIn && clip.fadeIn > 0 && (
+          <div
+            className="absolute left-0 top-0 bottom-0 pointer-events-none z-20 bg-gradient-to-r from-black/70 to-transparent flex items-start pl-1 pt-0.5 rounded-l-lg border-l-2 border-cyan-400"
+            style={{ width: `${Math.max(12, clip.fadeIn * zoom)}px` }}
+            title={`Fade In: ${clip.fadeIn.toFixed(1)}s`}
+          >
+            <span className="text-[9px] font-mono text-cyan-300">◢</span>
+          </div>
+        )}
+
+        {/* Fade Out Indicator */}
+        {clip.fadeOut && clip.fadeOut > 0 && (
+          <div
+            className="absolute right-0 top-0 bottom-0 pointer-events-none z-20 bg-gradient-to-l from-black/70 to-transparent flex items-start justify-end pr-1 pt-0.5 rounded-r-lg border-r-2 border-cyan-400"
+            style={{ width: `${Math.max(12, clip.fadeOut * zoom)}px` }}
+            title={`Fade Out: ${clip.fadeOut.toFixed(1)}s`}
+          >
+            <span className="text-[9px] font-mono text-cyan-300">◣</span>
+          </div>
+        )}
+
         {/* Clip Body Content */}
-        <div className="flex-1 px-3 flex items-center gap-1.5 truncate pointer-events-none">
+        <div className="flex-1 px-3 flex items-center gap-1.5 truncate pointer-events-none z-10">
           <span className={colorClasses.iconColor}>{icon}</span>
           <span className="truncate text-xs font-medium">{displayText}</span>
         </div>
 
         {/* Duration badge */}
         <span
-          className={`text-[10px] font-mono px-1 py-0.5 rounded mr-2 pointer-events-none ${
+          className={`text-[10px] font-mono px-1 py-0.5 rounded mr-2 pointer-events-none z-10 ${
             isSelected ? 'bg-black/30 text-black font-bold' : 'bg-black/40 text-zinc-400'
           }`}
         >
