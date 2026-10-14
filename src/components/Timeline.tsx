@@ -7,7 +7,8 @@ import {
   Film, 
   Type, 
   Music,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Layers
 } from 'lucide-react';
 import { Clip } from '../types/editor';
 import { formatSeconds } from '../utils/media-generator';
@@ -245,6 +246,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Filter clips by track
   const textClips = clips.filter((c) => c.trackId === 'track-text');
+  const overlayClips = clips.filter((c) => c.trackId === 'track-overlay');
   const videoClips = clips.filter((c) => c.trackId === 'track-video');
   const audioClips = clips.filter((c) => c.trackId === 'track-audio');
 
@@ -330,6 +332,32 @@ export const Timeline: React.FC<TimelineProps> = ({
           <span className={colorClasses.iconColor}>{icon}</span>
           <span className="truncate text-xs font-medium">{displayText}</span>
         </div>
+
+        {/* Transition tag */}
+        {clip.transition && clip.transition !== 'none' && (
+          <div 
+            className="absolute left-3 top-0.5 px-1 py-0.2 rounded bg-cyan-950/90 border border-cyan-400/50 text-[9px] font-mono text-cyan-300 font-bold z-20 pointer-events-none"
+            title={`Transição: ${clip.transition}`}
+          >
+            ⚡ {clip.transition}
+          </div>
+        )}
+
+        {/* Keyframe diamonds */}
+        {clip.keyframes && clip.keyframes.length > 0 && (
+          <div className="absolute inset-x-3 bottom-0.5 flex items-center pointer-events-none z-20">
+            {clip.keyframes.map((kf) => (
+              <span
+                key={kf.id}
+                className="absolute text-[8px] text-amber-300 transform -translate-x-1/2 drop-shadow"
+                style={{ left: `${(kf.timeOffset / clip.duration) * 100}%` }}
+                title={`Keyframe em ${kf.timeOffset.toFixed(1)}s`}
+              >
+                ◆
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Duration badge */}
         <span
@@ -473,7 +501,30 @@ export const Timeline: React.FC<TimelineProps> = ({
               )}
             </div>
 
-            {/* TRACK 2: MAIN VIDEO TRACK */}
+            {/* TRACK 2: OVERLAY / PIP (PICTURE-IN-PICTURE) */}
+            <div className="h-12 bg-[#161722]/60 border-y border-[#202232] relative flex items-center">
+              <div className="sticky left-0 z-20 bg-[#191a26] px-2 py-0.5 rounded text-[10px] font-bold text-purple-300 border border-purple-500/20 shadow-md ml-2 flex items-center gap-1 shrink-0">
+                <Layers className="w-3 h-3 text-purple-400" />
+                <span>Sobreposição (PIP)</span>
+              </div>
+
+              {overlayClips.map((clip) => {
+                const isImg = clip.type === 'image';
+                return renderClipBlock(
+                  clip,
+                  {
+                    selected: 'bg-gradient-to-r from-purple-400 to-indigo-500 text-black font-bold',
+                    idle: 'bg-gradient-to-r from-[#211530] to-[#171226] text-purple-200 border border-purple-500/40',
+                    iconColor: selectedClipId === clip.id ? 'text-black' : 'text-purple-400',
+                    handleColor: 'bg-purple-600/80 hover:bg-purple-700'
+                  },
+                  isImg ? <ImageIcon className="w-3.5 h-3.5" /> : <Film className="w-3.5 h-3.5" />,
+                  clip.title
+                );
+              })}
+            </div>
+
+            {/* TRACK 3: MAIN VIDEO TRACK */}
             <div className="h-16 bg-[#161722]/70 border-y border-[#232535] relative flex items-center">
               <div className="sticky left-0 z-20 bg-[#191a26] px-2 py-1 rounded text-[10px] font-bold text-cyan-300 border border-cyan-500/20 shadow-md ml-2 flex items-center gap-1 shrink-0">
                 <Film className="w-3 h-3 text-cyan-400" />

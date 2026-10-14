@@ -6,6 +6,7 @@ import { Timeline } from './components/Timeline';
 import { Inspector } from './components/Inspector';
 import { ExportModal } from './components/ExportModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { ScreenRecorderModal } from './components/ScreenRecorderModal';
 import { AspectRatio, Clip, VideoFilter } from './types/editor';
 import { createDemoVideoBlob } from './utils/media-generator';
 import { generateLofiBeatAudioBlob } from './utils/audio-engine';
@@ -23,6 +24,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'media' | 'text' | 'effects' | 'ai' | 'audio'>('media');
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
+  const [isRecorderOpen, setIsRecorderOpen] = useState<boolean>(false);
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
@@ -381,6 +383,14 @@ export function App() {
       currentTime < c.start + c.duration
   ) || null;
 
+  // Active overlay / PIP video clips
+  const activeOverlayClips = clips.filter(
+    (c) =>
+      c.trackId === 'track-overlay' &&
+      currentTime >= c.start &&
+      currentTime < c.start + c.duration
+  );
+
   // Active text subtitles overlays
   const activeTextClips = clips.filter(
     (c) =>
@@ -398,6 +408,38 @@ export function App() {
   );
 
   const selectedClip = clips.find((c) => c.id === selectedClipId) || null;
+
+  // Handler for Screen / Webcam recorder output
+  const handleRecordComplete = (blobUrl: string, duration: number, title: string) => {
+    const isCamera = title.toLowerCase().includes('câmera') || title.toLowerCase().includes('camera');
+    const newClip: Clip = {
+      id: `rec_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      trackId: isCamera ? 'track-overlay' : 'track-video',
+      type: 'video',
+      title,
+      start: currentTime,
+      duration: Math.max(1, duration),
+      source: blobUrl,
+      trimStart: 0,
+      trimEnd: Math.max(1, duration),
+      scale: isCamera ? 0.35 : 1,
+      posX: isCamera ? 32 : 0,
+      posY: isCamera ? 32 : 0,
+      rotation: 0,
+      opacity: 1,
+      filter: 'none',
+      volume: 1,
+      speed: 1,
+      muted: false,
+      fadeIn: 0.2,
+      fadeOut: 0.2
+    };
+
+    const nextClips = [...clips, newClip];
+    setClips(nextClips);
+    setSelectedClipId(newClip.id);
+    pushHistory(nextClips);
+  };
 
   // Actions
   const handleTogglePlay = () => {
@@ -581,6 +623,7 @@ export function App() {
           onGenerateAutoSubtitles={handleGenerateAutoSubtitles}
           onSmartSilenceCut={handleSmartSilenceCut}
           isAiProcessing={isAiProcessing}
+          onOpenScreenRecorder={() => setIsRecorderOpen(true)}
         />
 
         {/* Center: Realtime Viewport & Multi-Track Sound */}
@@ -592,6 +635,7 @@ export function App() {
           onTogglePlay={handleTogglePlay}
           onSeek={handleSeek}
           activeVideoClip={activeVideoClip}
+          activeOverlayClips={activeOverlayClips}
           activeTextClips={activeTextClips}
           activeAudioClips={activeAudioClips}
           selectedClip={selectedClip}
@@ -635,6 +679,13 @@ export function App() {
       <ShortcutsModal
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      {/* 6. Screen & Camera Recorder Modal */}
+      <ScreenRecorderModal
+        isOpen={isRecorderOpen}
+        onClose={() => setIsRecorderOpen(false)}
+        onRecordComplete={handleRecordComplete}
       />
 
       {/* 6. Drag & Drop File Upload Overlay */}

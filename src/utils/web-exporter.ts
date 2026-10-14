@@ -1,5 +1,9 @@
 import { AspectRatio, Clip, VideoFilter } from '../types/editor';
-import { calculateFadeMultiplier } from './timeline-math';
+import { 
+  calculateFadeMultiplier, 
+  interpolateClipProperties, 
+  calculateTransitionEffect 
+} from './timeline-math';
 
 export interface ExportOptions {
   aspectRatio: AspectRatio;
@@ -184,8 +188,10 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
 
       if (activeVideo) {
         applyCanvasFilter(ctx, activeVideo.filter || 'none');
+        const vTransform = interpolateClipProperties(activeVideo, currentTime);
+        const vTrans = calculateTransitionEffect(activeVideo, currentTime);
         const videoFade = calculateFadeMultiplier(activeVideo, currentTime);
-        ctx.globalAlpha = (activeVideo.opacity ?? 1) * videoFade;
+        ctx.globalAlpha = (vTransform.opacity ?? 1) * videoFade * vTrans.extraOpacity;
 
         // Draw animated gradient backdrop for video clip
         const relTime = currentTime - activeVideo.start;
@@ -201,21 +207,78 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
 
-        // Center card
+        // Center card with keyframe transform and transition offset
+        ctx.save();
+        const posX = width / 2 + ((vTransform.posX + vTrans.extraOffsetX) * width) / 100;
+        const posY = height / 2 + (vTransform.posY * height) / 100;
+        ctx.translate(posX, posY);
+        ctx.rotate((vTransform.rotation * Math.PI) / 180);
+        ctx.scale(vTransform.scale, vTransform.scale);
+
         ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.beginPath();
         const cardW = width * 0.7;
         const cardH = height * 0.5;
-        ctx.roundRect((width - cardW) / 2, (height - cardH) / 2, cardW, cardH, 24);
+        ctx.roundRect(-cardW / 2, -cardH / 2, cardW, cardH, 24);
         ctx.fill();
 
         ctx.fillStyle = '#ffffff';
         ctx.font = `bold ${Math.round(width * 0.045)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(activeVideo.title, width / 2, height / 2 - 10);
+        ctx.fillText(activeVideo.title, 0, -10);
+        ctx.restore();
+
+        // White flash transition
+        if (vTrans.flashAlpha > 0) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${vTrans.flashAlpha})`;
+          ctx.fillRect(0, 0, width, height);
+        }
       }
 
       ctx.restore();
+
+      // 2.05 Render Active Overlays (PIP Track)
+      const activeOverlays = clips.filter(
+        (c) => c.trackId === 'track-overlay' && currentTime >= c.start && currentTime < c.start + c.duration
+      );
+
+      for (const overlay of activeOverlays) {
+        ctx.save();
+        applyCanvasFilter(ctx, overlay.filter || 'none');
+        const oTransform = interpolateClipProperties(overlay, currentTime);
+        const oTrans = calculateTransitionEffect(overlay, currentTime);
+        const oFade = calculateFadeMultiplier(overlay, currentTime);
+        ctx.globalAlpha = (oTransform.opacity ?? 1) * oFade * oTrans.extraOpacity;
+
+        const posX = width / 2 + ((oTransform.posX + oTrans.extraOffsetX) * width) / 100;
+        const posY = height / 2 + (oTransform.posY * height) / 100;
+        ctx.translate(posX, posY);
+        ctx.rotate((oTransform.rotation * Math.PI) / 180);
+        ctx.scale(oTransform.scale, oTransform.scale);
+
+        const imgEl = imageElements.get(overlay.id);
+        const pipW = width * 0.4;
+        const pipH = height * 0.4;
+
+        if (overlay.type === 'image' && imgEl) {
+          ctx.drawImage(imgEl, -pipW / 2, -pipH / 2, pipW, pipH);
+        } else {
+          ctx.fillStyle = '#8b5cf6';
+          ctx.beginPath();
+          ctx.roundRect(-pipW / 2, -pipH / 2, pipW, pipH, 16);
+          ctx.fill();
+          ctx.strokeStyle = '#c084fc';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${Math.round(width * 0.025)}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(overlay.title, 0, 0);
+        }
+
+        ctx.restore();
+      }
 
       // 2.1 Render Active Image Clips (Logos / Overlays / Stickers)
       const activeImages = clips.filter(
@@ -228,15 +291,17 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
 
         ctx.save();
         applyCanvasFilter(ctx, activeImg.filter || 'none');
+        const imgTransform = interpolateClipProperties(activeImg, currentTime);
+        const imgTrans = calculateTransitionEffect(activeImg, currentTime);
         const imgFade = calculateFadeMultiplier(activeImg, currentTime);
-        ctx.globalAlpha = (activeImg.opacity ?? 1) * imgFade;
+        ctx.globalAlpha = (imgTransform.opacity ?? 1) * imgFade * imgTrans.extraOpacity;
 
-        const posX = width / 2 + (activeImg.posX * width) / 100;
-        const posY = height / 2 + (activeImg.posY * height) / 100;
+        const posX = width / 2 + ((imgTransform.posX + imgTrans.extraOffsetX) * width) / 100;
+        const posY = height / 2 + (imgTransform.posY * height) / 100;
 
         ctx.translate(posX, posY);
-        ctx.rotate((activeImg.rotation * Math.PI) / 180);
-        ctx.scale(activeImg.scale, activeImg.scale);
+        ctx.rotate((imgTransform.rotation * Math.PI) / 180);
+        ctx.scale(imgTransform.scale, imgTransform.scale);
 
         const imgAspect = (imgEl.naturalWidth || 1) / (imgEl.naturalHeight || 1);
         let targetW = width * 0.6;

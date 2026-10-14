@@ -16,9 +16,23 @@ export interface TextProperties {
   bold: boolean;
 }
 
+export type AudioEffect = 'none' | 'bass-boost' | 'vocal-enhance' | 'lo-fi';
+
+export type VisualTransition = 'none' | 'cross-dissolve' | 'slide-left' | 'fade-black' | 'flash-white';
+
+export interface Keyframe {
+  id: string;
+  timeOffset: number; // Seconds from clip start (0 to clip.duration)
+  scale?: number;
+  posX?: number;
+  posY?: number;
+  opacity?: number;
+  rotation?: number;
+}
+
 export interface Clip {
   id: string;
-  trackId: 'track-text' | 'track-video' | 'track-audio';
+  trackId: 'track-text' | 'track-overlay' | 'track-video' | 'track-audio';
   type: ClipType;
   title: string;
   start: number; // Seconds on timeline
@@ -42,10 +56,16 @@ export interface Clip {
   volume: number; // 0.0 - 2.0
   speed: number; // 0.5 - 2.0
   muted: boolean;
+  audioEffect?: AudioEffect;
 
   // Transitions
   fadeIn?: number; // Fade In duration in seconds (0 = none)
   fadeOut?: number; // Fade Out duration in seconds (0 = none)
+  transition?: VisualTransition;
+  transitionDuration?: number; // Duration of visual transition in seconds
+
+  // Keyframe Animations
+  keyframes?: Keyframe[];
 
   // Waveform Peaks (Normalized 0..1 amplitude values)
   waveform?: number[];

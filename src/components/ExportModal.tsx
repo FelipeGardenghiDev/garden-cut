@@ -10,6 +10,7 @@ import {
 import confetti from 'canvas-confetti';
 import { AspectRatio, Clip } from '../types/editor';
 import { renderTimelineToVideo } from '../utils/web-exporter';
+import { renderTimelineToGif } from '../utils/gif-exporter';
 
 const generateExportFileName = (prefix: string) => `${prefix}_${Date.now()}.mp4`;
 
@@ -28,6 +29,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   clips,
   totalDuration
 }) => {
+  const [exportFormat, setExportFormat] = useState<'video' | 'gif'>('video');
   const [resolution, setResolution] = useState<'720p' | '1080p' | '4k'>('1080p');
   const [fps, setFps] = useState<number>(30);
   const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -59,11 +61,37 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     }
   };
 
+  const runGifExport = async () => {
+    try {
+      const result = await renderTimelineToGif({
+        aspectRatio,
+        clips,
+        totalDuration,
+        fps: 12,
+        onProgress: (p) => setProgress(p)
+      });
+      setProgress(100);
+      setIsExporting(false);
+      setExportComplete(true);
+      setExportedFileName(result.fileName);
+      setDownloadUrl(result.blobUrl);
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+    } catch (err) {
+      console.error('Falha na renderização de GIF:', err);
+      setIsExporting(false);
+    }
+  };
+
   const handleStartExport = async () => {
     setIsExporting(true);
     setProgress(5);
     setExportComplete(false);
     setDownloadUrl(null);
+
+    if (exportFormat === 'gif') {
+      await runGifExport();
+      return;
+    }
 
     if (engineType === 'web') {
       await runWebExport();
@@ -144,49 +172,95 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         <div className="p-6 space-y-5">
           {!exportComplete ? (
             <>
-              {/* Engine Selection */}
+              {/* Output Format Selection */}
               <div>
                 <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">
-                  Motor de Renderização
+                  Formato de Exportação
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setEngineType('ffmpeg')}
+                    onClick={() => setExportFormat('video')}
                     className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
-                      engineType === 'ffmpeg'
-                        ? 'border-cyan-400 bg-cyan-500/10 text-white'
+                      exportFormat === 'video'
+                        ? 'border-cyan-400 bg-cyan-500/10 text-white font-bold'
                         : 'border-[#2d3042] bg-[#14151c] text-zinc-400'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-bold text-xs">
-                      <Cpu className="w-4 h-4 text-cyan-400" />
-                      <span>FFmpeg 8.1 (Local)</span>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <Film className="w-4 h-4 text-cyan-400" />
+                      <span>Vídeo WebM / MP4</span>
                     </div>
                     <span className="text-[10px] text-zinc-400">
-                      Aceleração por GPU (NVENC/AMF)
+                      Alta definição com áudio estéreo
                     </span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setEngineType('web')}
+                    onClick={() => setExportFormat('gif')}
                     className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
-                      engineType === 'web'
-                        ? 'border-cyan-400 bg-cyan-500/10 text-white'
+                      exportFormat === 'gif'
+                        ? 'border-fuchsia-400 bg-fuchsia-500/10 text-white font-bold'
                         : 'border-[#2d3042] bg-[#14151c] text-zinc-400'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-bold text-xs">
-                      <Film className="w-4 h-4 text-cyan-400" />
-                      <span>Web MediaRecorder</span>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <Sparkles className="w-4 h-4 text-fuchsia-400" />
+                      <span>GIF Animado</span>
                     </div>
                     <span className="text-[10px] text-zinc-400">
-                      Download direto pelo navegador
+                      Para memes, WhatsApp e Discord
                     </span>
                   </button>
                 </div>
               </div>
+
+              {/* Engine Selection (Only for Video format) */}
+              {exportFormat === 'video' && (
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">
+                    Motor de Renderização
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEngineType('ffmpeg')}
+                      className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                        engineType === 'ffmpeg'
+                          ? 'border-cyan-400 bg-cyan-500/10 text-white'
+                          : 'border-[#2d3042] bg-[#14151c] text-zinc-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <Cpu className="w-4 h-4 text-cyan-400" />
+                        <span>FFmpeg 8.1 (Local)</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400">
+                        Aceleração por GPU (NVENC/AMF)
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEngineType('web')}
+                      className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                        engineType === 'web'
+                          ? 'border-cyan-400 bg-cyan-500/10 text-white'
+                          : 'border-[#2d3042] bg-[#14151c] text-zinc-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <Film className="w-4 h-4 text-cyan-400" />
+                        <span>Web MediaRecorder</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400">
+                        Download direto pelo navegador
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Resolution & FPS */}
               <div className="grid grid-cols-2 gap-4">

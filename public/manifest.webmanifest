@@ -1,0 +1,18 @@
+{
+  "name": "GardenCut - Editor de Vídeos Web & PWA",
+  "short_name": "GardenCut",
+  "description": "Editor de vídeo moderno, ultrarrápido e 100% no navegador sem upload para servidores.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0d12",
+  "theme_color": "#06b6d4",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["video", "multimedia", "productivity", "utilities"]
+}

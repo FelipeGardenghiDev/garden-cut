@@ -9,7 +9,12 @@ import {
   Minimize
 } from 'lucide-react';
 import { AspectRatio, Clip } from '../types/editor';
-import { formatTimecode, calculateFadeMultiplier } from '../utils/timeline-math';
+import { 
+  formatTimecode, 
+  calculateFadeMultiplier,
+  interpolateClipProperties,
+  calculateTransitionEffect
+} from '../utils/timeline-math';
 
 interface PlayerProps {
   aspectRatio: AspectRatio;
@@ -19,12 +24,54 @@ interface PlayerProps {
   onTogglePlay: () => void;
   onSeek: (time: number) => void;
   activeVideoClip: Clip | null;
+  activeOverlayClips?: Clip[];
   activeTextClips: Clip[];
   activeAudioClips: Clip[];
   selectedClip?: Clip | null;
   onUpdateClip?: (updated: Clip, commitHistory?: boolean) => void;
   onSelectClip?: (clipId: string | null) => void;
 }
+
+// Frequency spectrum audio visualizer
+const VisualSpectrum: React.FC<{ isPlaying: boolean; effect?: string }> = ({ isPlaying, effect }) => {
+  const [bars, setBars] = useState([15, 25, 40, 30, 20, 35]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setBars([
+        Math.floor(20 + Math.random() * 60),
+        Math.floor(30 + Math.random() * 70),
+        Math.floor(15 + Math.random() * 85),
+        Math.floor(25 + Math.random() * 65),
+        Math.floor(35 + Math.random() * 55),
+        Math.floor(10 + Math.random() * 50)
+      ]);
+    }, 80);
+    return () => window.clearInterval(interval);
+  }, [isPlaying]);
+
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#121319] border border-[#2b2d3d] rounded-md shadow-inner">
+      <div className="flex items-end gap-0.5 h-3.5">
+        {bars.map((h, idx) => (
+          <div
+            key={idx}
+            className="w-1 rounded-sm bg-gradient-to-t from-cyan-500 to-fuchsia-500 transition-all duration-75"
+            style={{ height: isPlaying ? `${h}%` : '20%' }}
+          />
+        ))}
+      </div>
+      {effect && effect !== 'none' && (
+        <span className="text-[9px] font-mono text-cyan-300 font-bold uppercase tracking-wider">
+          {effect === 'bass-boost' ? 'BASS' : effect === 'vocal-enhance' ? 'VOCAL' : 'LO-FI'}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const AudioTrackPlayer: React.FC<{ clip: Clip; currentTime: number; isPlaying: boolean }> = ({
   clip,
@@ -64,6 +111,7 @@ export const Player: React.FC<PlayerProps> = ({
   onTogglePlay,
   onSeek,
   activeVideoClip,
+  activeOverlayClips = [],
   activeTextClips,
   activeAudioClips,
   selectedClip,
@@ -215,6 +263,9 @@ export const Player: React.FC<PlayerProps> = ({
     window.addEventListener('mouseup', onMouseUp);
   };
 
+  // Visual transforms and transitions for active video clip
+  const visualTransform = activeVideoClip ? interpolateClipProperties(activeVideoClip, currentTime) : null;
+  const visualTransition = activeVideoClip ? calculateTransitionEffect(activeVideoClip, currentTime) : null;
   const isVisualSelected = selectedClip && activeVideoClip && selectedClip.id === activeVideoClip.id;
 
   return (
@@ -248,8 +299,8 @@ export const Player: React.FC<PlayerProps> = ({
           className={`relative bg-black rounded-xl overflow-hidden border border-[#232533] shadow-2xl shadow-black flex items-center justify-center cursor-pointer ${getAspectRatioClasses()}`}
           style={{ maxWidth: '100%' }}
         >
-          {/* Visual Layer: Video or Image */}
-          {activeVideoClip && activeVideoClip.source ? (
+          {/* Main Visual Layer: Video or Image */}
+          {activeVideoClip && activeVideoClip.source && visualTransform && visualTransition ? (
             activeVideoClip.type === 'image' ? (
               <img
                 src={activeVideoClip.source}
@@ -257,8 +308,8 @@ export const Player: React.FC<PlayerProps> = ({
                 className="w-full h-full object-contain pointer-events-none transition-transform"
                 style={{
                   filter: getFilterStyle(activeVideoClip.filter),
-                  transform: `translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) scale(${activeVideoClip.scale}) rotate(${activeVideoClip.rotation}deg)`,
-                  opacity: activeVideoClip.opacity * calculateFadeMultiplier(activeVideoClip, currentTime)
+                  transform: `translate(${visualTransform.posX + visualTransition.extraOffsetX}%, ${visualTransform.posY}%) scale(${visualTransform.scale}) rotate(${visualTransform.rotation}deg)`,
+                  opacity: visualTransform.opacity * calculateFadeMultiplier(activeVideoClip, currentTime) * visualTransition.extraOpacity
                 }}
               />
             ) : (
@@ -268,8 +319,8 @@ export const Player: React.FC<PlayerProps> = ({
                 className="w-full h-full object-contain pointer-events-none transition-transform"
                 style={{
                   filter: getFilterStyle(activeVideoClip.filter),
-                  transform: `translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) scale(${activeVideoClip.scale}) rotate(${activeVideoClip.rotation}deg)`,
-                  opacity: activeVideoClip.opacity * calculateFadeMultiplier(activeVideoClip, currentTime)
+                  transform: `translate(${visualTransform.posX + visualTransition.extraOffsetX}%, ${visualTransform.posY}%) scale(${visualTransform.scale}) rotate(${visualTransform.rotation}deg)`,
+                  opacity: visualTransform.opacity * calculateFadeMultiplier(activeVideoClip, currentTime) * visualTransition.extraOpacity
                 }}
                 playsInline
               />
@@ -285,12 +336,87 @@ export const Player: React.FC<PlayerProps> = ({
             </div>
           )}
 
-          {/* Interactive Bounding Box / Gizmo for Visual Element (Video/Image) */}
-          {isVisualSelected && onUpdateClip && (
+          {/* Flash White Transition Overlay */}
+          {visualTransition && visualTransition.flashAlpha > 0 && (
             <div
-              className="absolute inset-0 pointer-events-auto cursor-move select-none z-10"
+              className="absolute inset-0 bg-white pointer-events-none z-30 transition-opacity"
+              style={{ opacity: visualTransition.flashAlpha }}
+            />
+          )}
+
+          {/* Picture-in-Picture (PIP) / Overlay Clips Layer */}
+          {activeOverlayClips.map((overlayClip) => {
+            const transform = interpolateClipProperties(overlayClip, currentTime);
+            const transition = calculateTransitionEffect(overlayClip, currentTime);
+            const isSelected = selectedClip?.id === overlayClip.id;
+
+            return (
+              <div
+                key={overlayClip.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onSelectClip) onSelectClip(overlayClip.id);
+                }}
+                className="absolute inset-0 flex items-center justify-center pointer-events-none z-15"
+              >
+                <div
+                  className="relative pointer-events-auto cursor-pointer"
+                  style={{
+                    width: '45%',
+                    height: '45%',
+                    transform: `translate(${transform.posX + transition.extraOffsetX}%, ${transform.posY}%) scale(${transform.scale}) rotate(${transform.rotation}deg)`,
+                    opacity: transform.opacity * calculateFadeMultiplier(overlayClip, currentTime) * transition.extraOpacity
+                  }}
+                >
+                  {overlayClip.type === 'image' ? (
+                    <img
+                      src={overlayClip.source}
+                      alt={overlayClip.title}
+                      className="w-full h-full object-contain drop-shadow-xl"
+                      style={{ filter: getFilterStyle(overlayClip.filter) }}
+                    />
+                  ) : (
+                    <video
+                      src={overlayClip.source}
+                      className="w-full h-full object-cover rounded-lg border border-purple-500/40 shadow-xl"
+                      style={{ filter: getFilterStyle(overlayClip.filter) }}
+                      playsInline
+                      muted
+                      autoPlay
+                      loop
+                    />
+                  )}
+
+                  {/* Gizmo for Overlay Clip when selected */}
+                  {isSelected && onUpdateClip && (
+                    <div
+                      className="absolute inset-0 border-2 border-dashed border-purple-400 pointer-events-auto cursor-move select-none shadow-[0_0_15px_rgba(168,85,247,0.7)]"
+                      onMouseDown={(e) => handleStartGizmoDrag(e, overlayClip, 'move')}
+                    >
+                      <div className="absolute -top-6 left-0 bg-purple-500 text-black font-extrabold text-[9px] px-1.5 py-0.5 rounded shadow">
+                        PIP ({Math.round(transform.scale * 100)}%)
+                      </div>
+                      <div
+                        onMouseDown={(e) => handleStartGizmoDrag(e, overlayClip, 'scale')}
+                        className="absolute -top-2 -left-2 w-4 h-4 bg-white border-2 border-purple-500 rounded cursor-nwse-resize shadow"
+                      />
+                      <div
+                        onMouseDown={(e) => handleStartGizmoDrag(e, overlayClip, 'scale')}
+                        className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-purple-500 rounded cursor-nwse-resize shadow"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Interactive Bounding Box / Gizmo for Main Visual Element */}
+          {isVisualSelected && onUpdateClip && visualTransform && (
+            <div
+              className="absolute inset-0 pointer-events-auto cursor-move select-none z-20"
               style={{
-                transform: `translate(${activeVideoClip.posX}%, ${activeVideoClip.posY}%) scale(${activeVideoClip.scale}) rotate(${activeVideoClip.rotation}deg)`,
+                transform: `translate(${visualTransform.posX}%, ${visualTransform.posY}%) scale(${visualTransform.scale}) rotate(${visualTransform.rotation}deg)`,
                 transformOrigin: 'center center'
               }}
               onMouseDown={(e) => handleStartGizmoDrag(e, activeVideoClip, 'move')}
@@ -300,7 +426,7 @@ export const Player: React.FC<PlayerProps> = ({
                 {/* Title and Scale Tag */}
                 <div className="absolute -top-7 left-0 bg-cyan-500 text-black font-extrabold text-[10px] px-2 py-0.5 rounded shadow flex items-center gap-1">
                   <span>{activeVideoClip.type === 'image' ? 'IMAGEM' : 'VÍDEO'}</span>
-                  <span className="opacity-75 font-mono">{Math.round(activeVideoClip.scale * 100)}%</span>
+                  <span className="opacity-75 font-mono">{Math.round(visualTransform.scale * 100)}%</span>
                 </div>
               </div>
 
@@ -334,6 +460,7 @@ export const Player: React.FC<PlayerProps> = ({
             if (!props) return null;
 
             const isTextSelected = selectedClip?.id === textClip.id;
+            const textTransform = interpolateClipProperties(textClip, currentTime);
 
             let styleClasses = 'text-white font-bold drop-shadow-md';
             if (props.style === 'capcut-yellow') {
@@ -356,8 +483,8 @@ export const Player: React.FC<PlayerProps> = ({
                 className="absolute inset-x-0 px-6 flex justify-center z-20 pointer-events-auto cursor-pointer"
                 style={{
                   bottom: props.style === 'capcut-yellow' ? '12%' : '18%',
-                  transform: `translate(${textClip.posX}%, ${textClip.posY}%) scale(${textClip.scale})`,
-                  opacity: calculateFadeMultiplier(textClip, currentTime)
+                  transform: `translate(${textTransform.posX}%, ${textTransform.posY}%) scale(${textTransform.scale})`,
+                  opacity: textTransform.opacity * calculateFadeMultiplier(textClip, currentTime)
                 }}
               >
                 <div
@@ -398,11 +525,18 @@ export const Player: React.FC<PlayerProps> = ({
 
       {/* Playback Controls Bar */}
       <div className="h-12 w-full max-w-xl bg-[#161820] border border-[#262835] rounded-xl px-4 flex items-center justify-between shadow-lg mt-2 z-20">
-        {/* Left: Timecode */}
-        <div className="flex items-center gap-1 font-mono text-xs text-zinc-300">
-          <span className="text-cyan-400 font-bold">{formatTimecode(currentTime)}</span>
-          <span className="text-zinc-600">/</span>
-          <span className="text-zinc-500">{formatTimecode(totalDuration)}</span>
+        {/* Left: Timecode & Spectrum Visualizer */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1 font-mono text-xs text-zinc-300">
+            <span className="text-cyan-400 font-bold">{formatTimecode(currentTime)}</span>
+            <span className="text-zinc-600">/</span>
+            <span className="text-zinc-500">{formatTimecode(totalDuration)}</span>
+          </div>
+
+          <VisualSpectrum
+            isPlaying={isPlaying}
+            effect={activeAudioClips[0]?.audioEffect || activeVideoClip?.audioEffect}
+          />
         </div>
 
         {/* Center: Play/Pause/Skip */}

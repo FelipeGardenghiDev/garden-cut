@@ -10,7 +10,8 @@ import {
   Sliders, 
   Check, 
   Volume2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Video
 } from 'lucide-react';
 import { Clip, VideoFilter, TextStyle } from '../types/editor';
 import { createDemoVideoBlob } from '../utils/media-generator';
@@ -33,6 +34,7 @@ interface SidebarProps {
   onGenerateAutoSubtitles: () => void;
   onSmartSilenceCut: () => void;
   isAiProcessing: boolean;
+  onOpenScreenRecorder?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -42,7 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onApplyFilterToSelected,
   onGenerateAutoSubtitles,
   onSmartSilenceCut,
-  isAiProcessing
+  isAiProcessing,
+  onOpenScreenRecorder
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -289,6 +292,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-xs font-semibold">Importar Mídia</span>
               <span className="text-[10px] text-zinc-500">Vídeos, Áudios ou Imagens (MP4, PNG, JPG, SVG)</span>
             </button>
+
+            {onOpenScreenRecorder && (
+              <button
+                onClick={onOpenScreenRecorder}
+                className="w-full py-3 px-4 border border-[#2d3042] hover:border-rose-500/80 rounded-xl flex items-center justify-between text-zinc-300 hover:text-white transition-all bg-[#1a1b26] hover:bg-[#201d2a] cursor-pointer group shadow"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 group-hover:scale-110 transition-transform">
+                    <Video className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-xs font-bold block">Gravar Tela ou Câmera</span>
+                    <span className="text-[10px] text-zinc-500">Gravação em tempo real</span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-rose-400 font-mono px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/30">
+                  REC
+                </span>
+              </button>
+            )}
 
             <div>
               <div className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-2 flex items-center justify-between">

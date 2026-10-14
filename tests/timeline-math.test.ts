@@ -6,7 +6,9 @@ import {
   splitClip, 
   calculateSnapPoint,
   getActiveClipsAtTime,
-  calculateFadeMultiplier
+  calculateFadeMultiplier,
+  interpolateClipProperties,
+  calculateTransitionEffect
 } from '../src/utils/timeline-math';
 import { Clip } from '../src/types/editor';
 
@@ -343,6 +345,113 @@ describe('timeline-math utility', () => {
       expect(getActiveClipsAtTime([imageClip], 2)).toHaveLength(1);
       expect(getActiveClipsAtTime([imageClip], 5.5)).toHaveLength(0);
       expect(calculateFadeMultiplier(imageClip, 1.25)).toBe(0.5);
+    });
+  });
+
+  describe('interpolateClipProperties', () => {
+    const baseClip: Clip = {
+      id: 'clip_kf',
+      trackId: 'track-video',
+      type: 'video',
+      title: 'Clip with Keyframes',
+      start: 2,
+      duration: 10,
+      source: '',
+      trimStart: 0,
+      trimEnd: 10,
+      scale: 1,
+      posX: 0,
+      posY: 0,
+      rotation: 0,
+      opacity: 1,
+      filter: 'none',
+      volume: 1,
+      speed: 1,
+      muted: false,
+      keyframes: [
+        { id: 'k1', timeOffset: 1, scale: 1.0, posX: 0, opacity: 1 },
+        { id: 'k2', timeOffset: 5, scale: 2.0, posX: 50, opacity: 0.5 }
+      ]
+    };
+
+    it('returns base values if clip has no keyframes', () => {
+      const { keyframes: _, ...noKf } = baseClip;
+      const res = interpolateClipProperties(noKf as Clip, 4);
+      expect(res.scale).toBe(1);
+      expect(res.posX).toBe(0);
+    });
+
+    it('clamps to first keyframe when before offset', () => {
+      // clip start = 2, so currentTime = 2.5 is offset 0.5 (before k1 at offset 1)
+      const res = interpolateClipProperties(baseClip, 2.5);
+      expect(res.scale).toBe(1.0);
+      expect(res.posX).toBe(0);
+    });
+
+    it('clamps to last keyframe when after offset', () => {
+      // offset = 6 (after k2 at offset 5)
+      const res = interpolateClipProperties(baseClip, 8);
+      expect(res.scale).toBe(2.0);
+      expect(res.posX).toBe(50);
+      expect(res.opacity).toBe(0.5);
+    });
+
+    it('linearly interpolates halfway between keyframes', () => {
+      // k1 at 1 (scale 1.0, posX 0), k2 at 5 (scale 2.0, posX 50).
+      // Midway is offset 3 (currentTime = start(2) + offset(3) = 5)
+      const res = interpolateClipProperties(baseClip, 5);
+      expect(res.scale).toBe(1.5);
+      expect(res.posX).toBe(25);
+      expect(res.opacity).toBe(0.75);
+    });
+  });
+
+  describe('calculateTransitionEffect', () => {
+    const transClip: Clip = {
+      id: 'clip_tr',
+      trackId: 'track-video',
+      type: 'video',
+      title: 'Transition Clip',
+      start: 5,
+      duration: 5,
+      source: '',
+      trimStart: 0,
+      trimEnd: 5,
+      scale: 1,
+      posX: 0,
+      posY: 0,
+      rotation: 0,
+      opacity: 1,
+      filter: 'none',
+      volume: 1,
+      speed: 1,
+      muted: false,
+      transition: 'cross-dissolve',
+      transitionDuration: 1.0
+    };
+
+    it('returns full opacity outside the transition window', () => {
+      // currentTime 7 is after start(5) + trans(1) = 6
+      const effect = calculateTransitionEffect(transClip, 7);
+      expect(effect.extraOpacity).toBe(1);
+    });
+
+    it('ramps cross-dissolve opacity from 0 to 1 during transition window', () => {
+      // start at 5, duration 1.0. At t=5.5 progress is 0.5
+      const effect = calculateTransitionEffect(transClip, 5.5);
+      expect(effect.extraOpacity).toBe(0.5);
+    });
+
+    it('calculates slide-left offset during transition window', () => {
+      const slideClip: Clip = { ...transClip, transition: 'slide-left', transitionDuration: 1.0 };
+      const effect = calculateTransitionEffect(slideClip, 5.5);
+      expect(effect.extraOffsetX).toBe(50);
+    });
+
+    it('calculates flash-white alpha during transition window', () => {
+      const flashClip: Clip = { ...transClip, transition: 'flash-white', transitionDuration: 1.0 };
+      const effect = calculateTransitionEffect(flashClip, 5.0);
+      expect(effect.flashAlpha).toBeCloseTo(0.85, 2);
     });
   });
 });

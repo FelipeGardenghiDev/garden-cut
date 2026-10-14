@@ -310,6 +310,31 @@ export const Inspector: React.FC<InspectorProps> = ({
                 ))}
               </div>
             </div>
+
+            {/* Audio Effects / Equalizer */}
+            <div className="space-y-1.5 pt-2 border-t border-[#262835]">
+              <span className="text-[10px] text-zinc-400 font-semibold block">Efeito de Áudio (Equalizador)</span>
+              <div className="grid grid-cols-2 gap-1">
+                {[
+                  { id: 'none', label: 'Normal' },
+                  { id: 'bass-boost', label: 'Bass Boost 808' },
+                  { id: 'vocal-enhance', label: 'Voz Nítida' },
+                  { id: 'lo-fi', label: 'Abafado Lo-Fi' }
+                ].map((eff) => (
+                  <button
+                    key={eff.id}
+                    onClick={() => onUpdateClip({ ...selectedClip, audioEffect: eff.id as any })}
+                    className={`py-1 px-1.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
+                      (selectedClip.audioEffect || 'none') === eff.id
+                        ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300 font-bold'
+                        : 'border-[#2d3040] bg-[#14151b] text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {eff.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -373,13 +398,84 @@ export const Inspector: React.FC<InspectorProps> = ({
                     fadeOut: preset.out
                   })
                 }
-                className="py-1 px-1.5 rounded bg-[#14151c] hover:bg-[#20222e] border border-[#2d3040] text-[10px] text-zinc-400 hover:text-white font-medium transition-colors"
+                className="py-1 px-1.5 rounded bg-[#14151c] hover:bg-[#20222e] border border-[#2d3040] text-[10px] text-zinc-400 hover:text-white font-medium transition-colors cursor-pointer"
               >
                 {preset.label}
               </button>
             ))}
           </div>
+
+          {/* Visual Transitions (For Visual clips) */}
+          {isVisual && (
+            <div className="space-y-1.5 pt-2 border-t border-[#262835]">
+              <span className="text-[10px] text-zinc-400 font-semibold block">Efeito de Transição (Corte)</span>
+              <select
+                value={selectedClip.transition || 'none'}
+                onChange={(e) => onUpdateClip({ ...selectedClip, transition: e.target.value as any })}
+                className="w-full bg-[#121319] border border-[#2d3040] text-zinc-200 rounded-lg p-2 text-xs outline-none"
+              >
+                <option value="none">Nenhuma (Corte Seco)</option>
+                <option value="cross-dissolve">Dissolver (Cross-Dissolve)</option>
+                <option value="slide-left">Deslizar (Slide Left)</option>
+                <option value="fade-black">Fade to Black</option>
+                <option value="flash-white">Flash Branco</option>
+              </select>
+            </div>
+          )}
         </div>
+
+        {/* KEYFRAME ANIMATIONS (For Visual and Text clips) */}
+        {(isVisual || isText) && (
+          <div className="space-y-3 pt-3 border-t border-[#262835]">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                Animação por Keyframes
+              </span>
+              <button
+                onClick={() => {
+                  const newKf = {
+                    id: `kf_${Date.now()}`,
+                    timeOffset: 0.5,
+                    scale: selectedClip.scale,
+                    posX: selectedClip.posX,
+                    posY: selectedClip.posY,
+                    opacity: selectedClip.opacity
+                  };
+                  const keyframes = [...(selectedClip.keyframes || []), newKf];
+                  onUpdateClip({ ...selectedClip, keyframes });
+                }}
+                className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                + Adicionar Ponto
+              </button>
+            </div>
+
+            {selectedClip.keyframes && selectedClip.keyframes.length > 0 ? (
+              <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                {selectedClip.keyframes.map((kf, idx) => (
+                  <div key={kf.id} className="p-2 rounded bg-[#14151c] border border-[#2d3040] flex items-center justify-between text-[11px]">
+                    <span className="text-zinc-300 font-mono">
+                      Ponto {idx + 1} ({kf.timeOffset.toFixed(1)}s): {Math.round((kf.scale || 1) * 100)}%
+                    </span>
+                    <button
+                      onClick={() => {
+                        const nextKf = selectedClip.keyframes?.filter((k) => k.id !== kf.id);
+                        onUpdateClip({ ...selectedClip, keyframes: nextKf });
+                      }}
+                      className="text-zinc-500 hover:text-rose-400 text-xs px-1 cursor-pointer"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-zinc-500">
+                Adicione pontos-chave para animar escala e posição suavemente.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
