@@ -1,0 +1,9 @@
+services:
+  - type: static_site
+    name: garden-cut
+    buildCommand: npm run build
+    publishDirectory: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
