@@ -8,7 +8,10 @@ import {
   getActiveClipsAtTime,
   calculateFadeMultiplier,
   interpolateClipProperties,
-  calculateTransitionEffect
+  calculateTransitionEffect,
+  applyEasing,
+  calculateAutoDuckingMultiplier,
+  removeSilenceFromClip
 } from '../src/utils/timeline-math';
 import { Clip } from '../src/types/editor';
 
@@ -452,6 +455,236 @@ describe('timeline-math utility', () => {
       const flashClip: Clip = { ...transClip, transition: 'flash-white', transitionDuration: 1.0 };
       const effect = calculateTransitionEffect(flashClip, 5.0);
       expect(effect.flashAlpha).toBeCloseTo(0.85, 2);
+    });
+  });
+
+  describe('applyEasing', () => {
+    it('calculates linear progress identically', () => {
+      expect(applyEasing(0, 'linear')).toBe(0);
+      expect(applyEasing(0.5, 'linear')).toBe(0.5);
+      expect(applyEasing(1, 'linear')).toBe(1);
+    });
+
+    it('calculates ease-in cubic curve (slow start)', () => {
+      expect(applyEasing(0, 'ease-in')).toBe(0);
+      expect(applyEasing(0.5, 'ease-in')).toBe(0.125);
+      expect(applyEasing(1, 'ease-in')).toBe(1);
+    });
+
+    it('calculates ease-out cubic curve (fast start, slow landing)', () => {
+      expect(applyEasing(0, 'ease-out')).toBe(0);
+      expect(applyEasing(0.5, 'ease-out')).toBe(0.875);
+      expect(applyEasing(1, 'ease-out')).toBe(1);
+    });
+
+    it('calculates ease-in-out symmetric s-curve', () => {
+      expect(applyEasing(0, 'ease-in-out')).toBe(0);
+      expect(applyEasing(0.5, 'ease-in-out')).toBe(0.5);
+      expect(applyEasing(1, 'ease-in-out')).toBe(1);
+    });
+
+    it('calculates bounce and spring endpoints properly', () => {
+      expect(applyEasing(0, 'bounce')).toBe(0);
+      expect(applyEasing(1, 'bounce')).toBeCloseTo(1, 2);
+      expect(applyEasing(0, 'spring')).toBe(0);
+      expect(applyEasing(1, 'spring')).toBe(1);
+    });
+  });
+
+  describe('interpolateClipProperties with easing', () => {
+    it('applies ease-in curve to keyframe interpolation', () => {
+      const clip: Clip = {
+        id: 'clip_ease',
+        trackId: 'track-video',
+        type: 'video',
+        title: 'Easing Video',
+        start: 0,
+        duration: 10,
+        source: '',
+        trimStart: 0,
+        trimEnd: 10,
+        scale: 1,
+        posX: 0,
+        posY: 0,
+        rotation: 0,
+        opacity: 1,
+        filter: 'none',
+        volume: 1,
+        speed: 1,
+        muted: false,
+        keyframes: [
+          { id: 'k1', timeOffset: 0, scale: 1.0, easing: 'ease-in' },
+          { id: 'k2', timeOffset: 10, scale: 2.0, easing: 'ease-in' }
+        ]
+      };
+
+      // At t=5 (midway), linear would be 1.5. Ease-in progress is 0.5^3 = 0.125, scale = 1.0 + 0.125 = 1.125
+      const res = interpolateClipProperties(clip, 5);
+      expect(res.scale).toBe(1.125);
+    });
+
+    it('applies ease-out curve to keyframe interpolation', () => {
+      const clip: Clip = {
+        id: 'clip_ease_out',
+        trackId: 'track-video',
+        type: 'video',
+        title: 'Easing Out Video',
+        start: 0,
+        duration: 10,
+        source: '',
+        trimStart: 0,
+        trimEnd: 10,
+        scale: 1,
+        posX: 0,
+        posY: 0,
+        rotation: 0,
+        opacity: 1,
+        filter: 'none',
+        volume: 1,
+        speed: 1,
+        muted: false,
+        keyframes: [
+          { id: 'k1', timeOffset: 0, scale: 1.0 },
+          { id: 'k2', timeOffset: 10, scale: 2.0, easing: 'ease-out' }
+        ]
+      };
+
+      // At t=5 (midway), ease-out progress is 1 - 0.5^3 = 0.875, scale = 1.0 + 0.875 = 1.875
+      const res = interpolateClipProperties(clip, 5);
+      expect(res.scale).toBe(1.875);
+    });
+  });
+
+  describe('calculateAutoDuckingMultiplier', () => {
+    const musicClip: Clip = {
+      id: 'music_1',
+      trackId: 'track-audio',
+      type: 'audio',
+      title: 'Background Music',
+      start: 0,
+      duration: 20,
+      source: '',
+      trimStart: 0,
+      trimEnd: 20,
+      scale: 1,
+      posX: 0,
+      posY: 0,
+      rotation: 0,
+      opacity: 1,
+      filter: 'none',
+      volume: 1,
+      speed: 1,
+      muted: false,
+      autoDuck: true,
+      duckAmount: 0.2
+    };
+
+    const speechClip: Clip = {
+      id: 'voice_1',
+      trackId: 'track-video',
+      type: 'video',
+      title: 'Presenter Speaking',
+      start: 5,
+      duration: 5, // from 5s to 10s
+      source: '',
+      trimStart: 0,
+      trimEnd: 5,
+      scale: 1,
+      posX: 0,
+      posY: 0,
+      rotation: 0,
+      opacity: 1,
+      filter: 'none',
+      volume: 1,
+      speed: 1,
+      muted: false
+    };
+
+    it('returns 1.0 when no voice clip is playing', () => {
+      const mult = calculateAutoDuckingMultiplier(musicClip, [musicClip, speechClip], 2.0);
+      expect(mult).toBe(1.0);
+    });
+
+    it('ducks volume down during active speech', () => {
+      // At t=7 (deep inside 5..10s voice clip)
+      const mult = calculateAutoDuckingMultiplier(musicClip, [musicClip, speechClip], 7.0);
+      expect(mult).toBe(0.2);
+    });
+
+    it('does not duck if the voice clip is muted', () => {
+      const mutedVoice: Clip = { ...speechClip, muted: true };
+      const mult = calculateAutoDuckingMultiplier(musicClip, [musicClip, mutedVoice], 7.0);
+      expect(mult).toBe(1.0);
+    });
+
+    it('does not duck if autoDuck is disabled on non-audio clip', () => {
+      const nonDuckClip: Clip = { ...musicClip, trackId: 'track-video', autoDuck: false };
+      const mult = calculateAutoDuckingMultiplier(nonDuckClip, [nonDuckClip, speechClip], 7.0);
+      expect(mult).toBe(1.0);
+    });
+  });
+
+  describe('removeSilenceFromClip', () => {
+    const sourceClip: Clip = {
+      id: 'clip_speech',
+      trackId: 'track-video',
+      type: 'video',
+      title: 'Speech Video',
+      start: 2,
+      duration: 10,
+      source: '',
+      trimStart: 0,
+      trimEnd: 10,
+      scale: 1,
+      posX: 0,
+      posY: 0,
+      rotation: 0,
+      opacity: 1,
+      filter: 'none',
+      volume: 1,
+      speed: 1,
+      muted: false
+    };
+
+    it('returns original clip if no silence intervals are provided', () => {
+      const res = removeSilenceFromClip(sourceClip, []);
+      expect(res.length).toBe(1);
+      expect(res[0]).toEqual(sourceClip);
+    });
+
+    it('cuts out middle silence and snaps audible parts sequentially', () => {
+      // Silence between 3s and 5s in source media
+      const silences = [{ startSec: 3.0, endSec: 5.0 }];
+      const res = removeSilenceFromClip(sourceClip, silences);
+
+      expect(res.length).toBe(2);
+
+      // Part 1: from 0 to 3s (duration 3s, timeline start 2s)
+      expect(res[0].start).toBe(2);
+      expect(res[0].duration).toBe(3);
+      expect(res[0].trimStart).toBe(0);
+      expect(res[0].trimEnd).toBe(3);
+
+      // Part 2: from 5 to 10s (duration 5s, timeline start 2 + 3 = 5s)
+      expect(res[1].start).toBe(5);
+      expect(res[1].duration).toBe(5);
+      expect(res[1].trimStart).toBe(5);
+      expect(res[1].trimEnd).toBe(10);
+    });
+
+    it('handles multiple silences and ignores silences outside clip bounds', () => {
+      const silences = [
+        { startSec: 1.0, endSec: 2.0 },
+        { startSec: 7.0, endSec: 8.5 },
+        { startSec: 15.0, endSec: 20.0 } // outside clip trimEnd (10s)
+      ];
+      const res = removeSilenceFromClip(sourceClip, silences);
+
+      // Audible: [0, 1], [2, 7], [8.5, 10]
+      expect(res.length).toBe(3);
+      expect(res[0].duration).toBe(1);
+      expect(res[1].duration).toBe(5);
+      expect(res[2].duration).toBe(1.5);
     });
   });
 });

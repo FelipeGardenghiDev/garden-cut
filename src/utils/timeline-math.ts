@@ -1,4 +1,48 @@
-import { Clip } from '../types/editor';
+import { Clip, EasingType } from '../types/editor';
+
+/**
+ * Applies mathematical easing curves to normalized time progress t in [0, 1].
+ */
+export function applyEasing(t: number, easing: EasingType = 'linear'): number {
+  const clampedT = Math.max(0, Math.min(1, t));
+
+  switch (easing) {
+    case 'ease-in':
+      return clampedT * clampedT * clampedT;
+    case 'ease-out':
+      return 1 - Math.pow(1 - clampedT, 3);
+    case 'ease-in-out':
+      return clampedT < 0.5
+        ? 4 * clampedT * clampedT * clampedT
+        : 1 - Math.pow(-2 * clampedT + 2, 3) / 2;
+    case 'bounce': {
+      const n1 = 7.5625;
+      const d1 = 2.75;
+      let progress = clampedT;
+      if (progress < 1 / d1) {
+        return n1 * progress * progress;
+      } else if (progress < 2 / d1) {
+        progress -= 1.5 / d1;
+        return n1 * progress * progress + 0.75;
+      } else if (progress < 2.5 / d1) {
+        progress -= 2.25 / d1;
+        return n1 * progress * progress + 0.9375;
+      } else {
+        progress -= 2.625 / d1;
+        return n1 * progress * progress + 0.984375;
+      }
+    }
+    case 'spring': {
+      if (clampedT === 0) return 0;
+      if (clampedT === 1) return 1;
+      const c4 = (2 * Math.PI) / 3;
+      return Math.pow(2, -10 * clampedT) * Math.sin((clampedT * 10 - 0.75) * c4) + 1;
+    }
+    case 'linear':
+    default:
+      return clampedT;
+  }
+}
 
 /**
  * Format seconds to standard Timecode `MM:SS:FF`
@@ -238,7 +282,10 @@ export function interpolateClipProperties(clip: Clip, currentTime: number): Inte
     const k2 = sorted[i + 1];
     if (offset >= k1.timeOffset && offset <= k2.timeOffset) {
       const segDuration = k2.timeOffset - k1.timeOffset;
-      const t = segDuration > 0 ? (offset - k1.timeOffset) / segDuration : 0;
+      const rawT = segDuration > 0 ? (offset - k1.timeOffset) / segDuration : 0;
+      
+      const easingCurve = k2.easing || k1.easing || 'linear';
+      const t = applyEasing(rawT, easingCurve);
       
       const lerp = (v1: number, v2: number) => v1 + (v2 - v1) * t;
 
@@ -257,7 +304,7 @@ export function interpolateClipProperties(clip: Clip, currentTime: number): Inte
         scale: Number(lerp(s1, s2).toFixed(3)),
         posX: Number(lerp(px1, px2).toFixed(2)),
         posY: Number(lerp(py1, py2).toFixed(2)),
-        opacity: Number(lerp(op1, op2).toFixed(3)),
+        opacity: Number(Math.max(0, Math.min(1, lerp(op1, op2))).toFixed(3)),
         rotation: Number(lerp(rot1, rot2).toFixed(2))
       };
     }
@@ -298,5 +345,148 @@ export function calculateTransitionEffect(
     default:
       return { extraOpacity: 1, extraOffsetX: 0, flashAlpha: 0 };
   }
+}
+
+/**
+ * Calculates dynamic sidechain volume ducking multiplier for background audio tracks.
+ * When vocal / dialogue / video clips with sound are active, ducks music down smoothly.
+ */
+export function calculateAutoDuckingMultiplier(
+  clip: Clip,
+  allClips: Clip[],
+  currentTime: number,
+  duckAmount = 0.25
+): number {
+  const shouldDuck = clip.autoDuck ?? (clip.trackId === 'track-audio');
+  if (!shouldDuck) {
+    return 1;
+  }
+
+  const effectiveDuck = clip.duckAmount ?? duckAmount;
+
+  // Find if any non-background clip is speaking/playing sound at currentTime
+  const activeVoiceClips = allClips.filter((other) => {
+    if (other.id === clip.id || other.trackId === 'track-audio') return false;
+    const isPlayingNow = currentTime >= other.start && currentTime < other.start + other.duration;
+    const hasSound = other.volume > 0 && !other.muted && (other.type === 'video' || other.type === 'audio');
+    return isPlayingNow && hasSound;
+  });
+
+  if (activeVoiceClips.length === 0) {
+    return 1;
+  }
+
+  // Smooth attack (0.15s) and release (0.2s) envelope
+  let minMultiplier = 1;
+
+  for (const voice of activeVoiceClips) {
+    const timeInVoice = currentTime - voice.start;
+    const timeFromVoiceEnd = voice.start + voice.duration - currentTime;
+    const attack = 0.15;
+    const release = 0.2;
+
+    let duckFactor = effectiveDuck;
+    if (timeInVoice < attack) {
+      const progress = Math.max(0, timeInVoice / attack);
+      duckFactor = 1 - (1 - effectiveDuck) * progress;
+    } else if (timeFromVoiceEnd < release) {
+      const progress = Math.max(0, timeFromVoiceEnd / release);
+      duckFactor = 1 - (1 - effectiveDuck) * progress;
+    }
+
+    if (duckFactor < minMultiplier) {
+      minMultiplier = duckFactor;
+    }
+  }
+
+  return Math.max(0.05, Math.min(1, minMultiplier));
+}
+
+/**
+ * Slices a clip into audible segments, removing silence intervals detected in the media,
+ * and lays out the resulting clips sequentially without dead gaps.
+ */
+export function removeSilenceFromClip(
+  clip: Clip,
+  silences: { startSec: number; endSec: number }[],
+  minSilenceDuration = 0.3
+): Clip[] {
+  if (!silences || silences.length === 0) {
+    return [clip];
+  }
+
+  const clipSourceStart = clip.trimStart;
+  const clipSourceEnd = clip.trimEnd;
+
+  // Filter silences that intersect with [clipSourceStart, clipSourceEnd]
+  const validSilences = silences
+    .filter((s) => s.endSec - s.startSec >= minSilenceDuration)
+    .map((s) => ({
+      startSec: Math.max(clipSourceStart, s.startSec),
+      endSec: Math.min(clipSourceEnd, s.endSec)
+    }))
+    .filter((s) => s.endSec > s.startSec)
+    .sort((a, b) => a.startSec - b.startSec);
+
+  if (validSilences.length === 0) {
+    return [clip];
+  }
+
+  // Merge overlapping silences
+  const mergedSilences: { startSec: number; endSec: number }[] = [];
+  let currentSilence = { ...validSilences[0] };
+
+  for (let i = 1; i < validSilences.length; i++) {
+    const next = validSilences[i];
+    if (next.startSec <= currentSilence.endSec) {
+      currentSilence.endSec = Math.max(currentSilence.endSec, next.endSec);
+    } else {
+      mergedSilences.push(currentSilence);
+      currentSilence = { ...next };
+    }
+  }
+  mergedSilences.push(currentSilence);
+
+  // Compute audible segments as the complement in [clipSourceStart, clipSourceEnd]
+  const audibleSegments: { startSec: number; endSec: number }[] = [];
+  let cursor = clipSourceStart;
+
+  for (const silence of mergedSilences) {
+    if (silence.startSec > cursor) {
+      audibleSegments.push({ startSec: cursor, endSec: silence.startSec });
+    }
+    cursor = Math.max(cursor, silence.endSec);
+  }
+
+  if (cursor < clipSourceEnd) {
+    audibleSegments.push({ startSec: cursor, endSec: clipSourceEnd });
+  }
+
+  if (audibleSegments.length === 0) {
+    return [clip];
+  }
+
+  let currentTimelineStart = clip.start;
+  const result: Clip[] = [];
+
+  audibleSegments.forEach((segment, idx) => {
+    const segmentDuration = segment.endSec - segment.startSec;
+    if (segmentDuration < 0.15 && audibleSegments.length > 1) {
+      return;
+    }
+
+    result.push({
+      ...clip,
+      id: idx === 0 ? clip.id : `${clip.id}_cut_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+      start: Number(currentTimelineStart.toFixed(3)),
+      duration: Number(segmentDuration.toFixed(3)),
+      trimStart: Number(segment.startSec.toFixed(3)),
+      trimEnd: Number(segment.endSec.toFixed(3))
+    });
+
+    currentTimelineStart += segmentDuration;
+  });
+
+  return result.length > 0 ? result : [clip];
 }
 

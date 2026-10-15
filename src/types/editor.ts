@@ -20,6 +20,8 @@ export type AudioEffect = 'none' | 'bass-boost' | 'vocal-enhance' | 'lo-fi';
 
 export type VisualTransition = 'none' | 'cross-dissolve' | 'slide-left' | 'fade-black' | 'flash-white';
 
+export type EasingType = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'bounce' | 'spring';
+
 export interface Keyframe {
   id: string;
   timeOffset: number; // Seconds from clip start (0 to clip.duration)
@@ -28,6 +30,24 @@ export interface Keyframe {
   posY?: number;
   opacity?: number;
   rotation?: number;
+  easing?: EasingType;
+}
+
+export interface ChromaKeySettings {
+  enabled: boolean;
+  color: string; // e.g. '#00ff00'
+  tolerance: number; // 0.05 to 0.8
+  smoothness: number; // 0.0 to 0.4
+}
+
+export interface BlurMaskSettings {
+  enabled: boolean;
+  x: number; // % offset (-50 to 50)
+  y: number; // % offset (-50 to 50)
+  width: number; // % width (5 to 100)
+  height: number; // % height (5 to 100)
+  blurRadius: number; // 2 to 30
+  type: 'blur' | 'pixelate';
 }
 
 export interface Clip {
@@ -57,6 +77,12 @@ export interface Clip {
   speed: number; // 0.5 - 2.0
   muted: boolean;
   audioEffect?: AudioEffect;
+  autoDuck?: boolean; // When true, music automatically ducks when voice/video is active
+  duckAmount?: number; // Volume multiplier during ducking (0.05 to 0.6, default 0.25)
+
+  // Visual Effects & Overlays
+  chromaKey?: ChromaKeySettings;
+  blurMask?: BlurMaskSettings;
 
   // Transitions
   fadeIn?: number; // Fade In duration in seconds (0 = none)

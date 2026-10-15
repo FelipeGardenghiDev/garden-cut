@@ -320,3 +320,97 @@ export async function generateBassDropBlob(): Promise<string> {
   const rendered = await ctx.startRendering();
   return URL.createObjectURL(audioBufferToWav(rendered));
 }
+
+/**
+ * Analyzes an AudioBuffer and returns time intervals (in seconds) where signal RMS is below thresholdDb
+ * for at least minDurationSec.
+ */
+export function analyzeAudioBufferSilence(
+  buffer: AudioBuffer,
+  thresholdDb = -35,
+  minDurationSec = 0.35
+): { startSec: number; endSec: number }[] {
+  const sampleRate = buffer.sampleRate;
+  const channelData = buffer.getChannelData(0);
+  const totalSamples = channelData.length;
+
+  // Window size: ~50ms (0.05s)
+  const windowSize = Math.max(128, Math.floor(sampleRate * 0.05));
+  const thresholdLinear = Math.pow(10, thresholdDb / 20);
+
+  const silences: { startSec: number; endSec: number }[] = [];
+  let inSilence = false;
+  let silenceStartSample = 0;
+
+  for (let i = 0; i < totalSamples; i += windowSize) {
+    const end = Math.min(totalSamples, i + windowSize);
+    let sumSq = 0;
+    for (let j = i; j < end; j++) {
+      const val = channelData[j];
+      sumSq += val * val;
+    }
+    const rms = Math.sqrt(sumSq / (end - i));
+
+    if (rms < thresholdLinear) {
+      if (!inSilence) {
+        inSilence = true;
+        silenceStartSample = i;
+      }
+    } else {
+      if (inSilence) {
+        inSilence = false;
+        const durationSec = (i - silenceStartSample) / sampleRate;
+        if (durationSec >= minDurationSec) {
+          silences.push({
+            startSec: Number((silenceStartSample / sampleRate).toFixed(3)),
+            endSec: Number((i / sampleRate).toFixed(3))
+          });
+        }
+      }
+    }
+  }
+
+  // Handle trailing silence until the end of buffer
+  if (inSilence) {
+    const durationSec = (totalSamples - silenceStartSample) / sampleRate;
+    if (durationSec >= minDurationSec) {
+      silences.push({
+        startSec: Number((silenceStartSample / sampleRate).toFixed(3)),
+        endSec: Number((totalSamples / sampleRate).toFixed(3))
+      });
+    }
+  }
+
+  return silences;
+}
+
+/**
+ * Decodes audio data from a blob or URL and computes silent intervals.
+ */
+export async function detectSilenceFromMedia(
+  source: string | Blob,
+  thresholdDb = -35,
+  minDurationSec = 0.35
+): Promise<{ startSec: number; endSec: number }[]> {
+  try {
+    let arrayBuffer: ArrayBuffer;
+    if (source instanceof Blob) {
+      arrayBuffer = await source.arrayBuffer();
+    } else if (typeof source === 'string' && source.length > 0) {
+      const resp = await fetch(source);
+      arrayBuffer = await resp.arrayBuffer();
+    } else {
+      return [];
+    }
+
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioContextClass();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    const silences = analyzeAudioBufferSilence(audioBuffer, thresholdDb, minDurationSec);
+    await ctx.close();
+    return silences;
+  } catch (err) {
+    console.warn('Unable to decode audio for silence detection:', err);
+    return [];
+  }
+}

@@ -2,8 +2,10 @@ import { AspectRatio, Clip, VideoFilter } from '../types/editor';
 import { 
   calculateFadeMultiplier, 
   interpolateClipProperties, 
-  calculateTransitionEffect 
+  calculateTransitionEffect,
+  calculateAutoDuckingMultiplier
 } from './timeline-math';
+import { applyChromaKeyToCanvas, applyBlurMaskToCanvas } from './visual-effects';
 
 export interface ExportOptions {
   aspectRatio: AspectRatio;
@@ -257,10 +259,27 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
         ctx.scale(oTransform.scale, oTransform.scale);
 
         const imgEl = imageElements.get(overlay.id);
-        const pipW = width * 0.4;
-        const pipH = height * 0.4;
+        const pipW = Math.round(width * 0.4);
+        const pipH = Math.round(height * 0.4);
 
-        if (overlay.type === 'image' && imgEl) {
+        if (overlay.chromaKey?.enabled) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = pipW;
+          tempCanvas.height = pipH;
+          const tempCtx = tempCanvas.getContext('2d');
+          if (tempCtx) {
+            if (overlay.type === 'image' && imgEl) {
+              tempCtx.drawImage(imgEl, 0, 0, pipW, pipH);
+            } else {
+              tempCtx.fillStyle = '#10b981';
+              tempCtx.beginPath();
+              tempCtx.roundRect(0, 0, pipW, pipH, 16);
+              tempCtx.fill();
+            }
+            applyChromaKeyToCanvas(tempCtx, pipW, pipH, overlay.chromaKey);
+            ctx.drawImage(tempCanvas, -pipW / 2, -pipH / 2, pipW, pipH);
+          }
+        } else if (overlay.type === 'image' && imgEl) {
           ctx.drawImage(imgEl, -pipW / 2, -pipH / 2, pipW, pipH);
         } else {
           ctx.fillStyle = '#8b5cf6';
@@ -313,6 +332,27 @@ export async function renderTimelineToVideo(options: ExportOptions): Promise<Exp
 
         ctx.drawImage(imgEl, -targetW / 2, -targetH / 2, targetW, targetH);
         ctx.restore();
+      }
+
+      // 2.2 Apply Privacy Blur / Pixelation Masks for Active Clips
+      const activeMaskClips = clips.filter(
+        (c) => c.blurMask?.enabled && currentTime >= c.start && currentTime < c.start + c.duration
+      );
+      for (const maskClip of activeMaskClips) {
+        if (maskClip.blurMask) {
+          applyBlurMaskToCanvas(ctx, width, height, maskClip.blurMask);
+        }
+      }
+
+      // 2.3 Auto-Ducking on Audio Soundtrack
+      if (masterGain) {
+        const bgAudio = clips.find(
+          (c) => c.trackId === 'track-audio' && currentTime >= c.start && currentTime < c.start + c.duration
+        );
+        if (bgAudio) {
+          const duckMult = calculateAutoDuckingMultiplier(bgAudio, clips, currentTime);
+          masterGain.gain.setValueAtTime(0.04 * duckMult, audioCtx.currentTime);
+        }
       }
 
       // 3. Render Active Text Subtitles / Overlays

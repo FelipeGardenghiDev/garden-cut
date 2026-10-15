@@ -8,14 +8,18 @@
 
 Todas as funcionalidades abaixo foram implementadas, cobertas por testes automatizados e integradas na branch `main`:
 
+* ✅ **Corte Inteligente de Silêncio Real (*Smart Silence Cut*):** Algoritmo de análise RMS e decibéis (< -34 dB por mais de 0.35s) no `AudioBuffer` real, fatiando a timeline automaticamente e eliminando pausas mortas.
+* ✅ **Auto-Ducking de Áudio (Sidechain Compression):** Redução dinâmica suave (-12 dB) da trilha musical (`track-audio`) quando há fala/voz em clipes de vídeo ou narração.
+* ✅ **Chroma Key (Remoção de Fundo Verde):** Processamento em tempo real com controle de tolerância, suavidade de bordas e supressão de spill no Player e no Web Exporter.
+* ✅ **Máscaras de Censura e Privacidade (Blur & Pixelate):** Delimitação retangular redimensionável e móvel para cobrir senhas, dados bancários e rostos em tutoriais.
+* ✅ **Curvas de Easing nos Keyframes:** Interpolação com curvas matemáticas *Linear*, *Ease-In*, *Ease-Out*, *Ease-In-Out*, *Bounce* e *Spring* selecionáveis por ponto.
 * ✅ **Gravador Nativo de Tela e Webcam (`ScreenRecorderModal.tsx`):** Captura ao vivo da tela inteira, janelas ou câmera/microfone via `MediaStream` e `MediaRecorder` diretamente no navegador, com preview e injeção automática na timeline.
 * ✅ **Equalizador & DSP de Áudio Real-Time:** Filtros paramétricos biquad (*Bass Boost 808*, *Vocal Presence*, *Lo-Fi*) com visualizador de espectro de frequência animado reativo à reprodução.
 * ✅ **Transições Visuais Cinematográficas:** *Cross-dissolve*, *Slide Left*, *Fade to Black* e *Flash White* computados frame a frame pelo motor matemático.
 * ✅ **Picture-in-Picture & Trilha Overlay (`track-overlay`):** Suporte a sobreposição de webcams e vídeos secundários com manipulador Gizmo interativo no canvas.
-* ✅ **Keyframes Temporais Paramétricos:** Interpolação linear contínua (Lerp) de Escala, Posição X/Y, Rotação e Opacidade com marcadores em diamante (`◆`) nos clipes.
 * ✅ **Exportador de GIF Animado (`gif-exporter.ts`):** Codificação local via `gifenc` com quantização de paleta para 256 cores e download direto.
 * ✅ **PWA & Instalação Offline:** Web App Manifest e metatags para execução como aplicativo nativo independente de conexão.
-* ✅ **Confiabilidade:** **36 testes unitários no Vitest passando** e **0 avisos/erros no Oxlint**.
+* ✅ **Confiabilidade:** **55 testes unitários no Vitest passando** e **0 avisos/erros no Oxlint**.
 
 ---
 

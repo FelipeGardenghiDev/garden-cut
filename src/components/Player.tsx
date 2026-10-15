@@ -13,8 +13,10 @@ import {
   formatTimecode, 
   calculateFadeMultiplier,
   interpolateClipProperties,
-  calculateTransitionEffect
+  calculateTransitionEffect,
+  calculateAutoDuckingMultiplier
 } from '../utils/timeline-math';
+import { applyChromaKeyToCanvas } from '../utils/visual-effects';
 
 interface PlayerProps {
   aspectRatio: AspectRatio;
@@ -27,6 +29,7 @@ interface PlayerProps {
   activeOverlayClips?: Clip[];
   activeTextClips: Clip[];
   activeAudioClips: Clip[];
+  allClips?: Clip[];
   selectedClip?: Clip | null;
   onUpdateClip?: (updated: Clip, commitHistory?: boolean) => void;
   onSelectClip?: (clipId: string | null) => void;
@@ -73,11 +76,12 @@ const VisualSpectrum: React.FC<{ isPlaying: boolean; effect?: string }> = ({ isP
   );
 };
 
-const AudioTrackPlayer: React.FC<{ clip: Clip; currentTime: number; isPlaying: boolean }> = ({
-  clip,
-  currentTime,
-  isPlaying
-}) => {
+const AudioTrackPlayer: React.FC<{
+  clip: Clip;
+  currentTime: number;
+  isPlaying: boolean;
+  allClips?: Clip[];
+}> = ({ clip, currentTime, isPlaying, allClips = [] }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -89,7 +93,8 @@ const AudioTrackPlayer: React.FC<{ clip: Clip; currentTime: number; isPlaying: b
     }
 
     const fadeFactor = calculateFadeMultiplier(clip, currentTime);
-    audioRef.current.volume = Math.max(0, Math.min(1, clip.volume * fadeFactor));
+    const duckFactor = calculateAutoDuckingMultiplier(clip, allClips, currentTime);
+    audioRef.current.volume = Math.max(0, Math.min(1, clip.volume * fadeFactor * duckFactor));
     audioRef.current.muted = clip.muted;
     audioRef.current.playbackRate = clip.speed;
 
@@ -98,9 +103,84 @@ const AudioTrackPlayer: React.FC<{ clip: Clip; currentTime: number; isPlaying: b
     } else {
       audioRef.current.pause();
     }
-  }, [currentTime, isPlaying, clip]);
+  }, [currentTime, isPlaying, clip, allClips]);
 
   return <audio ref={audioRef} src={clip.source} preload="auto" />;
+};
+
+const ChromaKeyCanvas: React.FC<{
+  clip: Clip;
+  isPlaying: boolean;
+  filterStyle?: string;
+}> = ({ clip, isPlaying, filterStyle }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !clip.chromaKey?.enabled) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    let animId: number;
+    const render = () => {
+      const sourceEl = clip.type === 'image' ? imgRef.current : videoRef.current;
+      if (sourceEl) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(sourceEl, 0, 0, canvas.width, canvas.height);
+        applyChromaKeyToCanvas(ctx, canvas.width, canvas.height, clip.chromaKey!);
+      }
+      if (isPlaying && clip.type === 'video') {
+        animId = requestAnimationFrame(render);
+      }
+    };
+
+    render();
+    return () => cancelAnimationFrame(animId);
+  }, [clip, isPlaying]);
+
+  return (
+    <div className="w-full h-full relative">
+      {clip.type === 'image' ? (
+        <img
+          ref={imgRef}
+          src={clip.source}
+          alt={clip.title}
+          className="hidden"
+          crossOrigin="anonymous"
+          onLoad={() => {
+            const canvas = canvasRef.current;
+            if (canvas && clip.chromaKey?.enabled) {
+              const ctx = canvas.getContext('2d', { willReadFrequently: true });
+              if (ctx && imgRef.current) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(imgRef.current, 0, 0, canvas.width, canvas.height);
+                applyChromaKeyToCanvas(ctx, canvas.width, canvas.height, clip.chromaKey);
+              }
+            }
+          }}
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          src={clip.source}
+          className="hidden"
+          playsInline
+          muted
+          autoPlay
+          loop
+        />
+      )}
+      <canvas
+        ref={canvasRef}
+        width={320}
+        height={240}
+        className="w-full h-full object-contain rounded-lg drop-shadow-xl"
+        style={{ filter: filterStyle }}
+      />
+    </div>
+  );
 };
 
 export const Player: React.FC<PlayerProps> = ({
@@ -114,6 +194,7 @@ export const Player: React.FC<PlayerProps> = ({
   activeOverlayClips = [],
   activeTextClips,
   activeAudioClips,
+  allClips = [],
   selectedClip,
   onUpdateClip,
   onSelectClip
@@ -235,14 +316,29 @@ export const Player: React.FC<PlayerProps> = ({
     let currentClip: Clip = { ...clip };
 
     const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      const deltaXPct = (deltaX / rect.width) * 100;
+      const deltaYPct = (deltaY / rect.height) * 100;
+
       if (action === 'move') {
-        const deltaX = moveEvent.clientX - startX;
-        const deltaY = moveEvent.clientY - startY;
-        const deltaXPct = (deltaX / rect.width) * 100;
-        const deltaYPct = (deltaY / rect.height) * 100;
         const newPosX = Math.max(-150, Math.min(150, Math.round(initPosX + deltaXPct)));
         const newPosY = Math.max(-150, Math.min(150, Math.round(initPosY + deltaYPct)));
         currentClip = { ...clip, posX: newPosX, posY: newPosY };
+        onUpdateClip(currentClip, false);
+      } else if ((action as string) === 'move-mask' && clip.blurMask) {
+        const initMaskX = clip.blurMask.x || 0;
+        const initMaskY = clip.blurMask.y || 0;
+        const newMaskX = Math.max(-50, Math.min(50, Math.round(initMaskX + deltaXPct)));
+        const newMaskY = Math.max(-50, Math.min(50, Math.round(initMaskY + deltaYPct)));
+        currentClip = {
+          ...clip,
+          blurMask: {
+            ...clip.blurMask,
+            x: newMaskX,
+            y: newMaskY
+          }
+        };
         onUpdateClip(currentClip, false);
       } else {
         const currentDist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY);
@@ -282,6 +378,7 @@ export const Player: React.FC<PlayerProps> = ({
           clip={audioClip}
           currentTime={currentTime}
           isPlaying={isPlaying}
+          allClips={allClips}
         />
       ))}
 
@@ -368,7 +465,13 @@ export const Player: React.FC<PlayerProps> = ({
                     opacity: transform.opacity * calculateFadeMultiplier(overlayClip, currentTime) * transition.extraOpacity
                   }}
                 >
-                  {overlayClip.type === 'image' ? (
+                  {overlayClip.chromaKey?.enabled ? (
+                    <ChromaKeyCanvas
+                      clip={overlayClip}
+                      isPlaying={isPlaying}
+                      filterStyle={getFilterStyle(overlayClip.filter)}
+                    />
+                  ) : overlayClip.type === 'image' ? (
                     <img
                       src={overlayClip.source}
                       alt={overlayClip.title}
@@ -520,6 +623,40 @@ export const Player: React.FC<PlayerProps> = ({
               </div>
             );
           })}
+
+          {/* Privacy Blur & Pixelation Masks */}
+          {allClips
+            .filter((c) => c.blurMask?.enabled && currentTime >= c.start && currentTime < c.start + c.duration)
+            .map((maskClip) => {
+              const mask = maskClip.blurMask!;
+              const isMaskSelected = selectedClip?.id === maskClip.id;
+
+              return (
+                <div
+                  key={`mask_${maskClip.id}`}
+                  className={`absolute rounded-md z-25 overflow-hidden select-none transition-shadow ${
+                    isMaskSelected
+                      ? 'border-2 border-dashed border-amber-400 pointer-events-auto cursor-move shadow-[0_0_15px_rgba(245,158,11,0.6)]'
+                      : 'pointer-events-none'
+                  }`}
+                  style={{
+                    width: `${mask.width}%`,
+                    height: `${mask.height}%`,
+                    left: `calc(50% + ${mask.x}% - ${mask.width / 2}%)`,
+                    top: `calc(50% + ${mask.y}% - ${mask.height / 2}%)`,
+                    backdropFilter: mask.type === 'pixelate' ? 'blur(1px)' : `blur(${mask.blurRadius || 12}px)`,
+                    backgroundColor: mask.type === 'pixelate' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.05)'
+                  }}
+                  onMouseDown={isMaskSelected && onUpdateClip ? (e) => handleStartGizmoDrag(e, maskClip, 'move-mask' as any) : undefined}
+                >
+                  {isMaskSelected && (
+                    <div className="absolute top-1 left-1 bg-amber-500 text-black font-extrabold text-[8px] px-1 py-0.5 rounded shadow">
+                      {mask.type === 'pixelate' ? 'PIXELATE' : 'BLUR'}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
         </div>
       </div>
 

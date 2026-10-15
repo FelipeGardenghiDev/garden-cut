@@ -9,9 +9,10 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { ScreenRecorderModal } from './components/ScreenRecorderModal';
 import { AspectRatio, Clip, VideoFilter } from './types/editor';
 import { createDemoVideoBlob } from './utils/media-generator';
-import { generateLofiBeatAudioBlob } from './utils/audio-engine';
+import { generateLofiBeatAudioBlob, detectSilenceFromMedia } from './utils/audio-engine';
 import { saveProjectToStorage, loadProjectFromStorage, clearProjectStorage } from './utils/project-storage';
 import { generateProceduralWaveform, extractWaveformPeaks } from './utils/waveform-generator';
+import { removeSilenceFromClip } from './utils/timeline-math';
 import { UploadCloud } from 'lucide-react';
 
 export function App() {
@@ -573,20 +574,50 @@ export function App() {
     }
   };
 
-  // AI Feature: Smart Silence Cut
-  const handleSmartSilenceCut = () => {
-    const nextClips = clips.map((c) => {
-      if (c.type === 'video' && c.duration > 1.5) {
-        return {
-          ...c,
-          duration: Math.max(1, c.duration - 0.5),
-          trimEnd: c.trimEnd - 0.5
-        };
+  // AI Feature: Real Smart Silence Cut based on RMS & Decibels
+  const handleSmartSilenceCut = async () => {
+    setIsAiProcessing(true);
+    try {
+      const targetClip = selectedClip || activeVideoClip || clips.find((c) => c.type === 'video' || c.type === 'audio');
+      if (!targetClip || !targetClip.source) {
+        setIsAiProcessing(false);
+        return;
       }
-      return c;
-    });
-    setClips(nextClips);
-    pushHistory(nextClips);
+
+      // Analyze real silences from media
+      const silences = await detectSilenceFromMedia(targetClip.source, -34, 0.35);
+
+      if (silences.length === 0) {
+        // Fallback: if media is synthetic without decode track, do a gentle pause trim
+        const nextClips = clips.map((c) => {
+          if (c.id === targetClip.id && c.duration > 2.0) {
+            return {
+              ...c,
+              duration: Math.max(1, c.duration - 0.5),
+              trimEnd: c.trimEnd - 0.5
+            };
+          }
+          return c;
+        });
+        setClips(nextClips);
+        pushHistory(nextClips);
+        return;
+      }
+
+      // Slice clip into audible pieces and eliminate silence gaps
+      const nonSilentClips = removeSilenceFromClip(targetClip, silences, 0.3);
+
+      const nextClips = clips.flatMap((c) => (c.id === targetClip.id ? nonSilentClips : [c]));
+      setClips(nextClips);
+      if (nonSilentClips.length > 0) {
+        setSelectedClipId(nonSilentClips[0].id);
+      }
+      pushHistory(nextClips);
+    } catch (err) {
+      console.error('Smart silence cut error:', err);
+    } finally {
+      setIsAiProcessing(false);
+    }
   };
 
   return (
@@ -638,6 +669,7 @@ export function App() {
           activeOverlayClips={activeOverlayClips}
           activeTextClips={activeTextClips}
           activeAudioClips={activeAudioClips}
+          allClips={clips}
           selectedClip={selectedClip}
           onUpdateClip={handleUpdateClip}
           onSelectClip={setSelectedClipId}

@@ -3,7 +3,7 @@ import {
   Sliders, 
   X
 } from 'lucide-react';
-import { Clip, VideoFilter, TextStyle } from '../types/editor';
+import { Clip, VideoFilter, TextStyle, EasingType } from '../types/editor';
 
 interface InspectorProps {
   selectedClip: Clip | null;
@@ -259,6 +259,212 @@ export const Inspector: React.FC<InspectorProps> = ({
                 <option value="blur">Desfoque (Blur)</option>
               </select>
             </div>
+
+            {/* Chroma Key (Green Screen) */}
+            <div className="space-y-2 pt-2 border-t border-[#262835]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                  Chroma Key (Fundo Verde)
+                </span>
+                <input
+                  type="checkbox"
+                  checked={selectedClip.chromaKey?.enabled || false}
+                  onChange={(e) =>
+                    onUpdateClip({
+                      ...selectedClip,
+                      chromaKey: {
+                        enabled: e.target.checked,
+                        color: selectedClip.chromaKey?.color || '#00ff00',
+                        tolerance: selectedClip.chromaKey?.tolerance || 0.35,
+                        smoothness: selectedClip.chromaKey?.smoothness || 0.1
+                      }
+                    })
+                  }
+                  className="accent-emerald-500 cursor-pointer"
+                />
+              </div>
+
+              {selectedClip.chromaKey?.enabled && (
+                <div className="p-2.5 rounded-lg bg-[#121319] border border-emerald-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-zinc-400 font-semibold">Cor Chave</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={selectedClip.chromaKey.color || '#00ff00'}
+                        onChange={(e) =>
+                          onUpdateClip({
+                            ...selectedClip,
+                            chromaKey: { ...selectedClip.chromaKey!, color: e.target.value }
+                          })
+                        }
+                        className="w-6 h-6 rounded border border-zinc-700 cursor-pointer bg-transparent"
+                      />
+                      <span className="font-mono text-[10px] text-emerald-400">
+                        {selectedClip.chromaKey.color}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tolerance */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-zinc-400 text-[10px]">
+                      <span>Tolerância</span>
+                      <span className="font-mono text-emerald-400">
+                        {Math.round(selectedClip.chromaKey.tolerance * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.05"
+                      max="0.8"
+                      step="0.02"
+                      value={selectedClip.chromaKey.tolerance}
+                      onChange={(e) =>
+                        onUpdateClip({
+                          ...selectedClip,
+                          chromaKey: { ...selectedClip.chromaKey!, tolerance: Number(e.target.value) }
+                        })
+                      }
+                      className="w-full accent-emerald-500"
+                    />
+                  </div>
+
+                  {/* Smoothness */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-zinc-400 text-[10px]">
+                      <span>Suavidade das Bordas</span>
+                      <span className="font-mono text-emerald-400">
+                        {Math.round(selectedClip.chromaKey.smoothness * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.0"
+                      max="0.4"
+                      step="0.02"
+                      value={selectedClip.chromaKey.smoothness}
+                      onChange={(e) =>
+                        onUpdateClip({
+                          ...selectedClip,
+                          chromaKey: { ...selectedClip.chromaKey!, smoothness: Number(e.target.value) }
+                        })
+                      }
+                      className="w-full accent-emerald-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Privacy Blur / Censorship Mask */}
+            <div className="space-y-2 pt-2 border-t border-[#262835]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                  Máscara de Censura / Blur
+                </span>
+                <input
+                  type="checkbox"
+                  checked={selectedClip.blurMask?.enabled || false}
+                  onChange={(e) =>
+                    onUpdateClip({
+                      ...selectedClip,
+                      blurMask: {
+                        enabled: e.target.checked,
+                        x: selectedClip.blurMask?.x || 0,
+                        y: selectedClip.blurMask?.y || 0,
+                        width: selectedClip.blurMask?.width || 30,
+                        height: selectedClip.blurMask?.height || 20,
+                        blurRadius: selectedClip.blurMask?.blurRadius || 12,
+                        type: selectedClip.blurMask?.type || 'pixelate'
+                      }
+                    })
+                  }
+                  className="accent-amber-500 cursor-pointer"
+                />
+              </div>
+
+              {selectedClip.blurMask?.enabled && (
+                <div className="p-2.5 rounded-lg bg-[#121319] border border-amber-500/30 space-y-2.5">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(['pixelate', 'blur'] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() =>
+                          onUpdateClip({
+                            ...selectedClip,
+                            blurMask: { ...selectedClip.blurMask!, type: t }
+                          })
+                        }
+                        className={`py-1 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                          selectedClip.blurMask?.type === t
+                            ? 'border-amber-400 bg-amber-500/20 text-amber-300'
+                            : 'border-[#2d3040] bg-[#14151b] text-zinc-400'
+                        }`}
+                      >
+                        {t === 'pixelate' ? 'Pixelização' : 'Desfoque Suave'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Width & Height */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-400">
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span>Largura</span>
+                        <span className="font-mono text-amber-400">{selectedClip.blurMask.width}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="80"
+                        value={selectedClip.blurMask.width}
+                        onChange={(e) =>
+                          onUpdateClip({
+                            ...selectedClip,
+                            blurMask: { ...selectedClip.blurMask!, width: Number(e.target.value) }
+                          })
+                        }
+                        className="w-full accent-amber-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span>Altura</span>
+                        <span className="font-mono text-amber-400">{selectedClip.blurMask.height}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="5"
+                        max="60"
+                        value={selectedClip.blurMask.height}
+                        onChange={(e) =>
+                          onUpdateClip({
+                            ...selectedClip,
+                            blurMask: { ...selectedClip.blurMask!, height: Number(e.target.value) }
+                          })
+                        }
+                        className="w-full accent-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reset Position */}
+                  <button
+                    onClick={() =>
+                      onUpdateClip({
+                        ...selectedClip,
+                        blurMask: { ...selectedClip.blurMask!, x: 0, y: 0 }
+                      })
+                    }
+                    className="w-full py-1 text-[10px] text-zinc-400 hover:text-white bg-[#1a1c26] hover:bg-[#222533] rounded border border-[#2d3040] cursor-pointer"
+                  >
+                    Centralizar Área
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -335,6 +541,52 @@ export const Inspector: React.FC<InspectorProps> = ({
                 ))}
               </div>
             </div>
+
+            {/* Audio Auto-Ducking */}
+            {isAudio && (
+              <div className="space-y-2 pt-2 border-t border-[#262835]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-400 font-semibold block">
+                    Auto-Ducking (Abaixar na Fala)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={selectedClip.autoDuck ?? true}
+                    onChange={(e) =>
+                      onUpdateClip({
+                        ...selectedClip,
+                        autoDuck: e.target.checked
+                      })
+                    }
+                    className="accent-cyan-400 cursor-pointer"
+                  />
+                </div>
+                {(selectedClip.autoDuck ?? true) && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-zinc-400 text-[10px]">
+                      <span>Volume Durante Fala</span>
+                      <span className="font-mono text-cyan-400">
+                        {Math.round((selectedClip.duckAmount ?? 0.25) * 100)}% (-12dB)
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.05"
+                      max="0.6"
+                      step="0.05"
+                      value={selectedClip.duckAmount ?? 0.25}
+                      onChange={(e) =>
+                        onUpdateClip({
+                          ...selectedClip,
+                          duckAmount: Number(e.target.value)
+                        })
+                      }
+                      className="w-full accent-cyan-400"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -453,19 +705,43 @@ export const Inspector: React.FC<InspectorProps> = ({
             {selectedClip.keyframes && selectedClip.keyframes.length > 0 ? (
               <div className="space-y-1.5 max-h-36 overflow-y-auto">
                 {selectedClip.keyframes.map((kf, idx) => (
-                  <div key={kf.id} className="p-2 rounded bg-[#14151c] border border-[#2d3040] flex items-center justify-between text-[11px]">
-                    <span className="text-zinc-300 font-mono">
-                      Ponto {idx + 1} ({kf.timeOffset.toFixed(1)}s): {Math.round((kf.scale || 1) * 100)}%
-                    </span>
-                    <button
-                      onClick={() => {
-                        const nextKf = selectedClip.keyframes?.filter((k) => k.id !== kf.id);
-                        onUpdateClip({ ...selectedClip, keyframes: nextKf });
-                      }}
-                      className="text-zinc-500 hover:text-rose-400 text-xs px-1 cursor-pointer"
-                    >
-                      ×
-                    </button>
+                  <div key={kf.id} className="p-2 rounded bg-[#14151c] border border-[#2d3040] space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-300 font-mono">
+                        Ponto {idx + 1} ({kf.timeOffset.toFixed(1)}s): {Math.round((kf.scale || 1) * 100)}%
+                      </span>
+                      <button
+                        onClick={() => {
+                          const nextKf = selectedClip.keyframes?.filter((k) => k.id !== kf.id);
+                          onUpdateClip({ ...selectedClip, keyframes: nextKf });
+                        }}
+                        className="text-zinc-500 hover:text-rose-400 text-xs px-1 cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    {/* Easing Curve Selector */}
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-[#222433]">
+                      <span className="text-[9px] text-zinc-500 font-semibold">Curva:</span>
+                      <select
+                        value={kf.easing || 'linear'}
+                        onChange={(e) => {
+                          const nextKf = selectedClip.keyframes?.map((k) =>
+                            k.id === kf.id ? { ...k, easing: e.target.value as EasingType } : k
+                          );
+                          onUpdateClip({ ...selectedClip, keyframes: nextKf });
+                        }}
+                        className="bg-[#121319] border border-[#2d3040] text-cyan-400 text-[10px] rounded px-1.5 py-0.5 outline-none font-medium flex-1 cursor-pointer"
+                      >
+                        <option value="linear">Linear (Constante)</option>
+                        <option value="ease-in">Ease-In (Acelera)</option>
+                        <option value="ease-out">Ease-Out (Desacelera)</option>
+                        <option value="ease-in-out">Ease-In-Out (Suave)</option>
+                        <option value="bounce">Bounce (Quique)</option>
+                        <option value="spring">Spring (Mola Elástica)</option>
+                      </select>
+                    </div>
                   </div>
                 ))}
               </div>

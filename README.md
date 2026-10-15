@@ -2,13 +2,13 @@
 
 [![CI - Quality Gate](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml/badge.svg)](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml)
 [![Part of GC Studio](https://img.shields.io/badge/Part%20of-GC%20Studio%20%2F%20Garden%20Apps-06B6D4?style=flat&logo=buffer)](https://github.com/FelipeGardenghiDev/projeto-homestudio)
-![Tests](https://img.shields.io/badge/Vitest-36%20passed-emerald?style=flat&logo=vitest)
+![Tests](https://img.shields.io/badge/Vitest-55%20passed-emerald?style=flat&logo=vitest)
 ![PWA](https://img.shields.io/badge/PWA-Installable%20%26%20Offline-blueviolet?style=flat)
 ![Linter](https://img.shields.io/badge/Oxlint-0%20warnings-cyan?style=flat)
 ![React](https://img.shields.io/badge/React-19-blue?style=flat&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-3178c6?style=flat&logo=typescript)
 
-> Editor de vídeos não-linear moderno e de alta performance web-first, com gravador nativo de tela/câmera, equalizador DSP em tempo real, transições visuais, overlays PIP com Gizmo, keyframes de animação, exportador de GIF animado e PWA offline.
+> Editor de vídeos não-linear moderno e de alta performance web-first, com corte inteligente de silêncio via decibéis RMS, auto-ducking dinâmico de áudio, Chroma Key em tempo real, máscaras de censura/blur, curvas de easing em keyframes, gravador nativo de tela/câmera, equalizador DSP, exportador de GIF animado e PWA offline.
 
 > 📄 **Planejamento de Engenharia:** Consulte o [Roadmap Estratégico de Evolução (Pós-V1)](ROADMAP.md).
 
@@ -51,6 +51,16 @@ flowchart TD
 
 ## 🚀 Funcionalidades Principais
 
+* **Chroma Key (Fundo Verde) em Tempo Real (`visual-effects.ts`):**
+  * Remoção precisa de panos de fundo verde (`#00ff00`) ou azul com controle de tolerância (0.05 a 0.8), suavidade de bordas e supressão de spill (vazamento de verde) aplicada no player e na renderização de exportação.
+* **Máscara de Privacidade / Censura (Blur & Pixelate):**
+  * Ferramenta de anotação com caixa delimitadora reposicionável e redimensionável para ocultar senhas, dados sensíveis ou rostos com desfoque gaussiano ou pixelização retrô.
+* **Auto-Ducking de Áudio (Sidechain Compression):**
+  * Quando houver voz/fala sendo reproduzida na trilha de vídeo ou narração, o volume da trilha musical (`track-audio`) reduz suavemente de 100% para 25% (-12 dB) e retorna automaticamente quando a fala cessa.
+* **Curvas de Easing nos Keyframes:**
+  * Movimentos cinematográficos de zoom e enquadramento com aceleração não-linear configurável por ponto: *Linear*, *Ease-In*, *Ease-Out*, *Ease-In-Out*, *Bounce* (quique) e *Spring* (mola elástica).
+* **Corte Inteligente de Silêncio Real (*Smart Silence Cut*):**
+  * Algoritmo de análise RMS e decibéis no `AudioBuffer` real (< -34 dB por mais de 0.35s), fatiando a timeline automaticamente e eliminando pausas mortas com snapping contínuo.
 * **Gravador de Tela & Câmera Integrado (`ScreenRecorderModal.tsx`):**
   * Gravação de tela inteira, janelas de aplicativos ou webcam com microfone diretamente no navegador via `getDisplayMedia` e `getUserMedia`.
   * Visualização prévia da gravação, contador de segundos em tempo real e adição instantânea à timeline.

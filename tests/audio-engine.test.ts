@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { audioBufferToWav } from '../src/utils/audio-engine';
+import { audioBufferToWav, analyzeAudioBufferSilence } from '../src/utils/audio-engine';
 
 describe('audio-engine audioBufferToWav', () => {
   it('converts an AudioBuffer into a valid 16-bit PCM WAV Blob', async () => {
@@ -106,5 +106,63 @@ describe('audio-engine audioBufferToWav', () => {
     // Max 16-bit positive is 0x7fff (32767), min negative is -0x8000 (-32768)
     expect(sample1).toBe(32767);
     expect(sample2).toBe(-32768);
+  });
+});
+
+describe('audio-engine analyzeAudioBufferSilence', () => {
+  it('detects silence sections below dB threshold correctly', () => {
+    const sampleRate = 1000;
+    // 3 seconds total:
+    // 0s to 1s: loud audio (sine wave ~0.5 amplitude)
+    // 1s to 2s: total silence (0.0 amplitude)
+    // 2s to 3s: loud audio (0.5 amplitude)
+    const length = 3000;
+    const channelData = new Float32Array(length);
+
+    for (let i = 0; i < 1000; i++) {
+      channelData[i] = 0.5 * Math.sin(i * 0.1);
+    }
+    // 1000..1999 are 0 (silence)
+    for (let i = 2000; i < 3000; i++) {
+      channelData[i] = 0.5 * Math.sin(i * 0.1);
+    }
+
+    const mockBuffer = {
+      numberOfChannels: 1,
+      sampleRate,
+      length,
+      duration: 3.0,
+      getChannelData: () => channelData
+    } as unknown as AudioBuffer;
+
+    const silences = analyzeAudioBufferSilence(mockBuffer, -30, 0.4);
+
+    expect(silences.length).toBe(1);
+    expect(silences[0].startSec).toBeGreaterThanOrEqual(0.95);
+    expect(silences[0].startSec).toBeLessThanOrEqual(1.05);
+    expect(silences[0].endSec).toBeGreaterThanOrEqual(1.90);
+    expect(silences[0].endSec).toBeLessThanOrEqual(2.05);
+  });
+
+  it('ignores brief silences shorter than minDurationSec', () => {
+    const sampleRate = 1000;
+    const length = 2000;
+    const channelData = new Float32Array(length).fill(0.6);
+
+    // Only 100ms of silence (0.1s), but minDuration is 0.35s
+    for (let i = 500; i < 600; i++) {
+      channelData[i] = 0.0;
+    }
+
+    const mockBuffer = {
+      numberOfChannels: 1,
+      sampleRate,
+      length,
+      duration: 2.0,
+      getChannelData: () => channelData
+    } as unknown as AudioBuffer;
+
+    const silences = analyzeAudioBufferSilence(mockBuffer, -35, 0.35);
+    expect(silences.length).toBe(0);
   });
 });
