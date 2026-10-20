@@ -1,7 +1,7 @@
 # GardenCut 🌿✂️
 
 [![CI - Quality Gate](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml/badge.svg)](https://github.com/FelipeGardenghiDev/garden-cut/actions/workflows/ci.yml)
-[![Part of GC Studio](https://img.shields.io/badge/Part%20of-GC%20Studio%20%2F%20Garden%20Apps-06B6D4?style=flat&logo=buffer)](https://github.com/FelipeGardenghiDev/projeto-homestudio)
+[![Part of GC Studio](https://img.shields.io/badge/Part%20of-GC%20Studio%20%2F%20Garden%20Apps-06B6D4?style=flat&logo=buffer)](https://github.com/FelipeGardenghiDev/gcstudio)
 ![Tests](https://img.shields.io/badge/Vitest-55%20passed-emerald?style=flat&logo=vitest)
 ![PWA](https://img.shields.io/badge/PWA-Installable%20%26%20Offline-blueviolet?style=flat)
 ![Linter](https://img.shields.io/badge/Oxlint-0%20warnings-cyan?style=flat)
