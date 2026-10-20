@@ -1,0 +1,6 @@
+{
+  "appId": "com.gardenghi.gardencut",
+  "appName": "Garden Cut",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
