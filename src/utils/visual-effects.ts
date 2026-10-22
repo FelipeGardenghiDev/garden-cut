@@ -115,3 +115,44 @@ export function applyBlurMaskToCanvas(
     ctx.restore();
   }
 }
+
+/**
+ * Calculates transition progress (0.0 to 1.0) given current time offset in transition window.
+ */
+export function calculateTransitionProgress(
+  elapsedTime: number,
+  duration: number
+): number {
+  if (duration <= 0) return 1.0;
+  return Math.max(0.0, Math.min(1.0, elapsedTime / duration));
+}
+
+/**
+ * Applies transition overlays (fade-black, flash-white, cross-dissolve) to the render canvas.
+ */
+export function applyTransitionOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  progress: number,
+  type: 'none' | 'cross-dissolve' | 'slide-left' | 'fade-black' | 'flash-white'
+): void {
+  if (type === 'none' || progress <= 0 || progress >= 1.0 || width <= 0 || height <= 0) return;
+
+  ctx.save();
+  if (type === 'fade-black') {
+    // Dip to black at midpoint (progress 0.5 = 100% black)
+    const alpha = 1.0 - Math.abs(progress - 0.5) * 2;
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+    ctx.fillRect(0, 0, width, height);
+  } else if (type === 'flash-white') {
+    // High-energy white flash
+    const alpha = 1.0 - Math.abs(progress - 0.5) * 2;
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+    ctx.fillRect(0, 0, width, height);
+  } else if (type === 'cross-dissolve') {
+    // Soft opacity overlay
+    ctx.globalAlpha = 1.0 - progress;
+  }
+  ctx.restore();
+}

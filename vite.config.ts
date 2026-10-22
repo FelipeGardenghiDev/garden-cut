@@ -91,6 +91,7 @@ function ffmpegApiPlugin(): Plugin {
 }
 
 export default defineConfig({
+  base: './',
   plugins: [
     react(),
     tailwindcss(),
@@ -101,3 +102,4 @@ export default defineConfig({
     host: true
   }
 });
+
